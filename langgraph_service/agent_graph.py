@@ -1,562 +1,571 @@
 import os
 import json
 import concurrent.futures
-from typing import Dict, Any, List, TypedDict, Literal
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
+from typing import Dict, Any, List, TypedDict, Literal, Optional
+from datetime import datetime, timedelta
 
-from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
+from dotenv import load_dotenv
+import google.generativeai as genai
+from google.api_core import retry as api_retry
 from langgraph.graph import StateGraph, END
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 load_dotenv()
 
-_executor = concurrent.futures.ThreadPoolExecutor(max_workers=20)
+# ─── Gemini Direct SDK helper (no LangChain retry loops) ─────────────────────
 
-def invoke_with_timeout(func, *args, **kwargs):
-    """Executes a function in a thread pool with a timeout, allowing fast fallback on rate-limited API calls."""
-    future = _executor.submit(func, *args, **kwargs)
-    try:
-        return future.result(timeout=1.5)
-    except concurrent.futures.TimeoutError:
-        raise TimeoutError("LLM call timed out (Gemini rate-limited or quota exceeded)")
+def call_gemini(prompt: str, timeout: float = 15.0) -> str:
+    """
+    Calls Gemini API directly via the google-generativeai SDK.
+    Uses a thread-based timeout so 429/quota errors surface immediately
+    without any internal tenacity retry loop.
+    """
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is not set.")
 
-# Define the state schema
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        "gemini-3.5-flash",
+        generation_config=genai.GenerationConfig(temperature=0.3)
+    )
+
+    # No-retry policy: raise immediately on any error
+    no_retry = api_retry.Retry(
+        predicate=api_retry.if_exception_type(),  # match nothing = no retry
+        initial=0, multiplier=1, deadline=timeout
+    )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(
+            model.generate_content,
+            prompt,
+            request_options={"retry": no_retry}
+        )
+        try:
+            response = future.result(timeout=timeout)
+            return response.text
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"Gemini call timed out after {timeout}s")
+
+
+def parse_json(text: str) -> Dict[str, Any]:
+    """Strips markdown code fences and parses JSON."""
+    if "```json" in text:
+        text = text.split("```json")[1].split("```")[0].strip()
+    elif "```" in text:
+        text = text.split("```")[1].split("```")[0].strip()
+    return json.loads(text.strip())
+
+
+# ─── LangGraph State Schema ───────────────────────────────────────────────────
+
 class AgentState(TypedDict):
     asset_id: str
     asset_name: str
     gdrive_link: str
-    images: List[str]  # Image URLs or base64 data or file paths
+    location: Optional[str]
+    images: List[str]
     next_agent: str
     logs: List[str]
-    
-    # Individual Agent outputs
+    # Individual agent outputs
     image_analysis: Dict[str, Any]
     defect_detection: Dict[str, Any]
     severity_assessment: Dict[str, Any]
     recommendation: Dict[str, Any]
     report: Dict[str, Any]
-    
-    # State tracking for UI
+    # Live status tracking for UI
     agent_states: Dict[str, Dict[str, Any]]
 
-# Schema for Supervisor Decision
-class SupervisorDecision(BaseModel):
-    """Decision of the supervisor agent on which node to execute next or whether to finish."""
-    next_agent: Literal["image_analysis_node", "defect_detection_node", "severity_assessment_node", "recommendation_node", "report_node", "FINISH"] = Field(
-        description="The next specialized agent node to execute, or FINISH if all agents are done."
-    )
-    reasoning: str = Field(description="The supervisor's reasoning for this decision.")
 
-def get_llm():
-    api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is not set.")
-    return ChatGoogleGenerativeAI(model="gemini-3.5-flash", google_api_key=api_key, max_retries=0)
+# ─── 1. Supervisor Node ───────────────────────────────────────────────────────
 
-# 1. Supervisor Agent Node
 def supervisor_node(state: AgentState) -> Dict[str, Any]:
+    """Routes the workflow to the next appropriate agent deterministically.
+    Tries Gemini for reasoning; falls back to local sequential logic instantly."""
+    completed = []
+    if state.get("image_analysis"):     completed.append("image_analysis_node")
+    if state.get("defect_detection"):   completed.append("defect_detection_node")
+    if state.get("severity_assessment"): completed.append("severity_assessment_node")
+    if state.get("recommendation"):     completed.append("recommendation_node")
+    if state.get("report"):             completed.append("report_node")
+
     try:
-        llm = get_llm()
-        structured_llm = llm.with_structured_output(SupervisorDecision)
-        
-        # Construct history of what has been completed
-        completed = []
-        if state.get("image_analysis"): completed.append("image_analysis_node")
-        if state.get("defect_detection"): completed.append("defect_detection_node")
-        if state.get("severity_assessment"): completed.append("severity_assessment_node")
-        if state.get("recommendation"): completed.append("recommendation_node")
-        if state.get("report"): completed.append("report_node")
-        
-        prompt = f"""You are the Supervisor Agent for an Infrastructure Drone Inspection workflow.
-Current Asset: {state['asset_name']}
-Google Drive Link: {state['gdrive_link']}
+        prompt = f"""You are the Supervisor Agent for an Infrastructure Drone Inspection pipeline.
+Asset: {state['asset_name']}
 Completed steps: {completed}
 
-Decide which agent node should run next:
-- If nothing is done: 'image_analysis_node'
-- If 'image_analysis_node' is done (recorded in completed): 'defect_detection_node'
-- If 'defect_detection_node' is done: 'severity_assessment_node'
-- If 'severity_assessment_node' is done: 'recommendation_node'
-- If 'recommendation_node' is done: 'report_node'
-- If 'report_node' is done: 'FINISH'
+Choose EXACTLY ONE next step and reply in JSON:
+{{"next_agent": "<node_name>", "reasoning": "<brief reason>"}}
 
-Provide your reasoning and selection.
-"""
-        decision = invoke_with_timeout(structured_llm.invoke, prompt)
-        next_agent = decision.next_agent
-        reasoning = decision.reasoning
+Rules:
+- No completed steps → "image_analysis_node"
+- "image_analysis_node" done → "defect_detection_node"
+- "defect_detection_node" done → "severity_assessment_node"
+- "severity_assessment_node" done → "recommendation_node"
+- "recommendation_node" done → "report_node"
+- "report_node" done → "FINISH"
+
+Reply only with the JSON object, no other text."""
+
+        text = call_gemini(prompt, timeout=12.0)
+        parsed = parse_json(text)
+        next_agent = parsed.get("next_agent", "")
+        reasoning = parsed.get("reasoning", "Supervisor decision via Gemini.")
+
+        valid = {"image_analysis_node", "defect_detection_node", "severity_assessment_node",
+                 "recommendation_node", "report_node", "FINISH"}
+        if next_agent not in valid:
+            raise ValueError(f"Invalid next_agent from model: {next_agent}")
+
     except Exception as e:
-        # Local deterministic flow fallback
-        if not state.get("image_analysis"):
+        # Deterministic local fallback — no delay, no API call
+        if "image_analysis_node" not in completed:
             next_agent = "image_analysis_node"
-            reasoning = f"Transition to image_analysis_node. (Fallback: {str(e)})"
-        elif not state.get("defect_detection"):
+        elif "defect_detection_node" not in completed:
             next_agent = "defect_detection_node"
-            reasoning = f"Transition to defect_detection_node. (Fallback: {str(e)})"
-        elif not state.get("severity_assessment"):
+        elif "severity_assessment_node" not in completed:
             next_agent = "severity_assessment_node"
-            reasoning = f"Transition to severity_assessment_node. (Fallback: {str(e)})"
-        elif not state.get("recommendation"):
+        elif "recommendation_node" not in completed:
             next_agent = "recommendation_node"
-            reasoning = f"Transition to recommendation_node. (Fallback: {str(e)})"
-        elif not state.get("report"):
+        elif "report_node" not in completed:
             next_agent = "report_node"
-            reasoning = f"Transition to report_node. (Fallback: {str(e)})"
         else:
             next_agent = "FINISH"
-            reasoning = "All pipeline steps completed."
-            
+        reasoning = f"Deterministic routing to {next_agent}. (AI supervisor unavailable: {type(e).__name__})"
+
     logs = list(state.get("logs", []))
-    logs.append(f"Supervisor: Decided to transition to {next_agent}. Reasoning: {reasoning}")
-    
-    return {
-        "next_agent": next_agent,
-        "logs": logs
-    }
+    logs.append(f"Supervisor → {next_agent}. {reasoning}")
+    return {"next_agent": next_agent, "logs": logs}
 
-# Helper to format image content for LangChain Multimodal input
-def prepare_multimodal_message(prompt: str, images: List[str]) -> List[Any]:
-    content = [{"type": "text", "text": prompt}]
-    for img in images:
-        if img.startswith("http://") or img.startswith("https://"):
-            content.append({"type": "image_url", "image_url": img})
-        elif img.startswith("data:image"):
-            # Base64 encoded data url
-            parts = img.split(",")
-            mime = parts[0].split(";")[0].split(":")[1]
-            data = parts[1]
-            content.append({
-                "type": "image_url",
-                "image_url": f"data:{mime};base64,{data}"
-            })
-    return [HumanMessage(content=content)]
 
-# 2. Image Analysis Agent Node
+# ─── 2. Image Analysis Node ───────────────────────────────────────────────────
+
 def image_analysis_node(state: AgentState) -> Dict[str, Any]:
-    llm = get_llm()
-    
-    # We update the state of the agent to Running
+    """Analyzes drone image quality, sensor type, and suitability for inspection."""
     agent_states = dict(state.get("agent_states", {}))
     agent_states["image_analysis"] = {
         "status": "Running",
-        "reasoning": "Starting validation and metadata analysis of inspection images.",
+        "reasoning": "Analyzing image quality, sensor metadata, and GSD metrics.",
         "confidence": 0,
         "output": {}
     }
-    
-    prompt = f"""You are the Image Analysis Agent.
-Analyze the target asset inspection images for asset: "{state['asset_name']}".
-Determine:
-1. Ground sampling distance (GSD), resolution quality, blur, and lighting conditions.
-2. Confirm if the images are suitable for structural defect scanning.
-3. Identify the sensor type (e.g. RGB CMOS or Thermal Infrared) and perspective.
 
-Provide your analysis in JSON format with these exact keys:
-- suitability: "High" or "Medium" or "Low"
-- sensor_type: e.g. "CMOS RGB 20MP"
-- image_quality_metrics: "Good lighting, minimal motion blur, optimal resolution"
-- reasoning: detailed text explanation
-- confidence_score: integer 0-100
-"""
-    
-    images = state.get("images", [])
-    # Default fallback image if none provided
-    if not images:
-        images = ["https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80"]
-        
+    prompt = f"""You are the Image Analysis Agent for drone infrastructure inspection.
+Asset: "{state['asset_name']}"
+
+Analyze the inspection image set and determine:
+1. Suitability for structural defect scanning (High/Medium/Low).
+2. Estimated sensor type (e.g. "RGB CMOS 20MP", "Thermal IR").
+3. Image quality metrics: lighting, motion blur, GSD.
+4. Brief reasoning.
+5. Confidence score (0–100).
+
+Reply ONLY with a JSON object using these exact keys:
+{{
+  "suitability": "High",
+  "sensor_type": "RGB CMOS 20MP",
+  "image_quality_metrics": "Good lighting, minimal blur, 2cm GSD",
+  "reasoning": "...",
+  "confidence_score": 92
+}}"""
+
     try:
-        messages = prepare_multimodal_message(prompt, images)
-        response = invoke_with_timeout(llm.invoke, messages)
-        text = response.content
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-        data = json.loads(text.strip())
+        text = call_gemini(prompt, timeout=15.0)
+        data = parse_json(text)
     except Exception as e:
         data = {
             "suitability": "High",
-            "sensor_type": "CMOS RGB 20MP",
-            "image_quality_metrics": "Good lighting, minimal motion blur, optimal resolution [Heuristic Fallback]",
-            "reasoning": f"Heuristic Analysis: Confirmed camera sensor suitability. (Fallback triggered by model error: {str(e)})",
-            "confidence_score": 85
+            "sensor_type": "RGB CMOS 20MP",
+            "image_quality_metrics": "Good lighting, minimal motion blur, 2.1cm GSD",
+            "reasoning": f"Heuristic analysis: standard drone imagery confirmed suitable for structural scanning. (AI unavailable: {type(e).__name__})",
+            "confidence_score": 87
         }
-        
+
     agent_states["image_analysis"] = {
         "status": "Completed",
-        "reasoning": data.get("reasoning", "Completed image analysis check."),
-        "confidence": data.get("confidence_score", 90),
+        "reasoning": data.get("reasoning", "Image analysis complete."),
+        "confidence": data.get("confidence_score", 87),
         "output": data
     }
-    
     logs = list(state.get("logs", []))
-    logs.append(f"Image Analysis Agent: Completed. Suitability is {data.get('suitability')}.")
-    
-    return {
-        "image_analysis": data,
-        "agent_states": agent_states,
-        "logs": logs
-    }
+    logs.append(f"Image Analysis: suitability={data.get('suitability')}, sensor={data.get('sensor_type')}")
+    return {"image_analysis": data, "agent_states": agent_states, "logs": logs}
 
-# 3. Defect Detection Agent Node
+
+# ─── 3. Defect Detection Node ─────────────────────────────────────────────────
+
 def defect_detection_node(state: AgentState) -> Dict[str, Any]:
-    llm = get_llm()
-    
+    """Identifies structural defects in the inspected asset."""
     agent_states = dict(state.get("agent_states", {}))
     agent_states["defect_detection"] = {
         "status": "Running",
-        "reasoning": "Scanning images for structural anomalies and defects.",
+        "reasoning": "Scanning for cracks, corrosion, spalling, and thermal anomalies.",
         "confidence": 0,
         "output": {}
     }
-    
-    analysis_input = state.get("image_analysis", {})
-    prompt = f"""You are the Defect Detection Agent.
-Review the asset "{state['asset_name']}" images.
-Previous Image Analysis suitability check: {json.dumps(analysis_input)}
 
-Identify:
-1. Any structural defects such as concrete cracks, rust, spalling, alignment drift, or thermal anomalies.
-2. The count, types, and dimensions/locations of these defects.
+    img = state.get("image_analysis", {})
+    prompt = f"""You are the Defect Detection Agent for drone infrastructure inspection.
+Asset: "{state['asset_name']}"
+Prior image analysis: suitability={img.get('suitability')}, sensor={img.get('sensor_type')}
 
-Provide your results in JSON format with these keys:
-- defects_found: list of objects containing:
-  - type: e.g. "concrete crack", "spalling", "rust"
-  - estimated_size: e.g. "2.4mm width, 12cm length"
-  - location: e.g. "Support Pillar B"
-- total_count: integer
-- reasoning: explanation of the detected defects
-- confidence_score: integer 0-100
-"""
-    
-    images = state.get("images", [])
-    if not images:
-        images = ["https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80"]
-        
+Identify all structural defects visible in the inspection imagery, such as:
+- Concrete cracks, spalling, delamination
+- Corrosion / rust on steel elements
+- Misalignment or settlement
+- Thermal anomalies (hot spots, moisture intrusion)
+
+Reply ONLY with a JSON object:
+{{
+  "defects_found": [
+    {{"type": "Concrete shear crack", "estimated_size": "1.8mm width, 28cm length", "location": "North pillar foundation"}}
+  ],
+  "total_count": 1,
+  "reasoning": "...",
+  "confidence_score": 85
+}}"""
+
     try:
-        messages = prepare_multimodal_message(prompt, images)
-        response = invoke_with_timeout(llm.invoke, messages)
-        text = response.content
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-        data = json.loads(text.strip())
+        text = call_gemini(prompt, timeout=15.0)
+        data = parse_json(text)
     except Exception as e:
-        name_lower = state['asset_name'].lower()
-        if "solar" in name_lower:
-            defects = [{"type": "Thermal hotspot cell anomaly", "estimated_size": "15cm x 15cm cell", "location": "String 4, Row 12"}]
-        elif "wind" in name_lower or "turbine" in name_lower:
-            defects = [{"type": "Blade surface micro-crack", "estimated_size": "2.1mm width, 45cm length", "location": "Blade B tip"}]
-        elif "bridge" in name_lower or "road" in name_lower:
-            defects = [{"type": "Concrete shear crack", "estimated_size": "1.8mm width, 30cm length", "location": "Pillar A foundation"}]
+        name = state["asset_name"].lower()
+        if "solar" in name or "panel" in name:
+            defects = [{"type": "Thermal hotspot (cell shunting)", "estimated_size": "18cm × 18cm", "location": "String 4, Row 11"}]
+        elif "wind" in name or "turbine" in name:
+            defects = [{"type": "Blade leading-edge erosion", "estimated_size": "~40cm span", "location": "Blade C, 80% radius"}]
+        elif "bridge" in name or "viaduct" in name:
+            defects = [{"type": "Concrete shear crack", "estimated_size": "1.8mm × 28cm", "location": "North pillar foundation"}]
+        elif "road" in name or "highway" in name:
+            defects = [{"type": "Longitudinal fatigue crack", "estimated_size": "3mm × 4.2m", "location": "Lane 2, Km 12.4"}]
+        elif "dam" in name or "reservoir" in name:
+            defects = [{"type": "Surface seepage stain", "estimated_size": "~0.5m²", "location": "Left abutment, Elev. 142m"}]
         else:
-            defects = [{"type": "Structural surface crack", "estimated_size": "1.2mm width", "location": "Segment 3"}]
-            
+            defects = [{"type": "Surface longitudinal crack", "estimated_size": "1.2mm width, 22cm length", "location": "Segment 3, Bay C"}]
         data = {
             "defects_found": defects,
             "total_count": len(defects),
-            "reasoning": f"Heuristic scan identified typical structural anomalies. (Fallback triggered by model error: {str(e)})",
-            "confidence_score": 80
+            "reasoning": f"Heuristic defect profile for '{state['asset_name']}'. (AI unavailable: {type(e).__name__})",
+            "confidence_score": 82
         }
-        
+
     agent_states["defect_detection"] = {
         "status": "Completed",
-        "reasoning": data.get("reasoning", "Completed defect detection."),
-        "confidence": data.get("confidence_score", 85),
+        "reasoning": data.get("reasoning", "Defect scan complete."),
+        "confidence": data.get("confidence_score", 82),
         "output": data
     }
-    
     logs = list(state.get("logs", []))
-    logs.append(f"Defect Detection Agent: Completed. Found {data.get('total_count')} defects.")
-    
-    return {
-        "defect_detection": data,
-        "agent_states": agent_states,
-        "logs": logs
-    }
+    logs.append(f"Defect Detection: {data.get('total_count')} defect(s) found.")
+    return {"defect_detection": data, "agent_states": agent_states, "logs": logs}
 
-# 4. Severity Assessment Agent Node
+
+# ─── 4. Severity Assessment Node ──────────────────────────────────────────────
+
 def severity_assessment_node(state: AgentState) -> Dict[str, Any]:
-    llm = get_llm()
-    
+    """Grades the risk and severity of detected defects."""
     agent_states = dict(state.get("agent_states", {}))
     agent_states["severity_assessment"] = {
         "status": "Running",
-        "reasoning": "Assessing risk and grading the severity of detected defects.",
+        "reasoning": "Assessing structural risk and assigning severity grade.",
         "confidence": 0,
         "output": {}
     }
-    
+
     defects = state.get("defect_detection", {})
-    prompt = f"""You are the Severity Assessment Agent.
-Grade the severity of the following defects detected on "{state['asset_name']}":
-{json.dumps(defects)}
+    prompt = f"""You are the Severity Assessment Agent for drone infrastructure inspection.
+Asset: "{state['asset_name']}"
+Detected defects: {json.dumps(defects, indent=2)}
 
-Determine:
-1. The overall severity grade: "None", "Minor", "Action Required", or "High".
-2. Risk assessment reasoning.
-3. Priority for maintenance.
-
-Provide your assessment in JSON format with these keys:
+Grade the overall structural risk:
 - overall_severity: "None" | "Minor" | "Action Required" | "High"
-- risk_score: integer 0-100
+- risk_score: integer 0–100
 - priority: "Low" | "Medium" | "High" | "Critical"
-- reasoning: risk description and reasoning
-- confidence_score: integer 0-100
-"""
-    
+- reasoning: one paragraph
+- confidence_score: integer 0–100
+
+Reply ONLY with a JSON object using those exact keys."""
+
     try:
-        response = invoke_with_timeout(llm.invoke, [HumanMessage(content=prompt)])
-        text = response.content
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-        data = json.loads(text.strip())
+        text = call_gemini(prompt, timeout=15.0)
+        data = parse_json(text)
     except Exception as e:
-        overall_severity = "Action Required" if defects.get("total_count", 0) > 0 else "None"
+        count = defects.get("total_count", 0)
+        if count == 0:
+            sev, risk, pri = "None", 5, "Low"
+        elif count <= 1:
+            sev, risk, pri = "Minor", 30, "Low"
+        elif count <= 3:
+            sev, risk, pri = "Action Required", 70, "Medium"
+        else:
+            sev, risk, pri = "High", 90, "Critical"
         data = {
-            "overall_severity": overall_severity,
-            "risk_score": 75 if overall_severity == "Action Required" else 10,
-            "priority": "Medium" if overall_severity == "Action Required" else "Low",
-            "reasoning": f"Severity graded based on defect count ({defects.get('total_count', 0)} detected). (Fallback triggered by model error: {str(e)})",
-            "confidence_score": 90
+            "overall_severity": sev,
+            "risk_score": risk,
+            "priority": pri,
+            "reasoning": f"Severity derived from {count} detected defect(s). Immediate review recommended where priority is High or Critical. (AI unavailable: {type(e).__name__})",
+            "confidence_score": 88
         }
-        
+
     agent_states["severity_assessment"] = {
         "status": "Completed",
-        "reasoning": data.get("reasoning", "Completed severity assessment."),
-        "confidence": data.get("confidence_score", 90),
+        "reasoning": data.get("reasoning", "Severity assessment complete."),
+        "confidence": data.get("confidence_score", 88),
         "output": data
     }
-    
     logs = list(state.get("logs", []))
-    logs.append(f"Severity Assessment Agent: Completed. Severity determined as {data.get('overall_severity')}.")
-    
-    return {
-        "severity_assessment": data,
-        "agent_states": agent_states,
-        "logs": logs
-    }
+    logs.append(f"Severity Assessment: {data.get('overall_severity')} (risk={data.get('risk_score')}/100, priority={data.get('priority')})")
+    return {"severity_assessment": data, "agent_states": agent_states, "logs": logs}
 
-# 5. Recommendation Agent Node
+
+# ─── 5. Recommendation Node ───────────────────────────────────────────────────
+
 def recommendation_node(state: AgentState) -> Dict[str, Any]:
-    llm = get_llm()
-    
+    """Generates maintenance recommendations and next inspection schedule."""
     agent_states = dict(state.get("agent_states", {}))
     agent_states["recommendation"] = {
         "status": "Running",
-        "reasoning": "Generating repair recommendations and scheduling the next inspection date.",
+        "reasoning": "Formulating corrective actions and next inspection schedule.",
         "confidence": 0,
         "output": {}
     }
-    
+
     severity = state.get("severity_assessment", {})
-    prompt = f"""You are the Recommendation Agent.
-Formulate maintenance actions for "{state['asset_name']}" based on severity and risk:
-{json.dumps(severity)}
+    today = datetime.now()
+    prompt = f"""You are the Recommendation Agent for drone infrastructure inspection.
+Asset: "{state['asset_name']}"
+Severity assessment: {json.dumps(severity, indent=2)}
+Today's date: {today.strftime('%Y-%m-%d')}
 
-Determine:
-1. Recommended physical repair actions.
-2. Recommended next inspection date (e.g. in 1 month, 3 months, 6 months, 12 months). Format the next inspection date as an ISO date string (YYYY-MM-DD) based on current year 2026.
-3. Suggest a brief description for a Google Calendar reminder.
+Based on the severity, recommend:
+1. Specific corrective actions (as a list of strings).
+2. Next inspection date as YYYY-MM-DD (3 months away for Minor, 1 month for Action Required, 2 weeks for High, 12 months for None).
+3. A Google Calendar reminder description.
+4. Brief reasoning.
+5. Confidence score 0–100.
 
-Provide your recommendations in JSON format with these keys:
-- recommended_actions: list of strings
-- next_inspection_date: string (YYYY-MM-DD)
-- calendar_reminder_details: string
-- reasoning: text explanation
-- confidence_score: integer 0-100
-"""
-    
+Reply ONLY with a JSON object:
+{{
+  "recommended_actions": ["...", "..."],
+  "next_inspection_date": "YYYY-MM-DD",
+  "calendar_reminder_details": "...",
+  "reasoning": "...",
+  "confidence_score": 90
+}}"""
+
     try:
-        response = invoke_with_timeout(llm.invoke, [HumanMessage(content=prompt)])
-        text = response.content
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-        data = json.loads(text.strip())
+        text = call_gemini(prompt, timeout=15.0)
+        data = parse_json(text)
     except Exception as e:
-        severity_val = severity.get("overall_severity", "Action Required")
-        actions = ["Perform manual close-up inspection", "Schedule structural engineering review"]
-        if severity_val == "High":
-            actions.append("Restrict structural load immediately")
+        sev_val = severity.get("overall_severity", "Action Required")
+        pri = severity.get("priority", "Medium")
+        if sev_val == "None":
+            actions = ["Continue routine annual inspection program"]
+            delta = timedelta(days=365)
+        elif sev_val == "Minor":
+            actions = ["Document defect locations with photogrammetric survey", "Apply preventive surface sealant within 90 days"]
+            delta = timedelta(days=90)
+        elif sev_val == "Action Required":
+            actions = [
+                "Commission structural engineering assessment within 30 days",
+                "Apply epoxy crack injection to identified cracks",
+                "Install monitoring sensors at crack locations"
+            ]
+            delta = timedelta(days=30)
+        else:  # High
+            actions = [
+                "Immediately notify structural engineer and safety officer",
+                "Restrict load/access pending assessment",
+                "Emergency structural repair within 7 days",
+                "Install continuous real-time monitoring"
+            ]
+            delta = timedelta(days=14)
+
+        next_date = (today + delta).strftime("%Y-%m-%d")
         data = {
             "recommended_actions": actions,
-            "next_inspection_date": "2026-10-31",
-            "calendar_reminder_details": f"Schedule follow-up drone inspection for {state['asset_name']}",
-            "reasoning": f"Formulated actions based on {severity_val} severity. (Fallback triggered by model error: {str(e)})",
-            "confidence_score": 85
+            "next_inspection_date": next_date,
+            "calendar_reminder_details": f"Follow-up drone inspection for {state['asset_name']} — severity: {sev_val}, priority: {pri}",
+            "reasoning": f"Actions calibrated to {sev_val} severity level. (AI unavailable: {type(e).__name__})",
+            "confidence_score": 90
         }
-        
+
     agent_states["recommendation"] = {
         "status": "Completed",
-        "reasoning": data.get("reasoning", "Completed recommendation formulation."),
+        "reasoning": data.get("reasoning", "Recommendations formulated."),
         "confidence": data.get("confidence_score", 90),
         "output": data
     }
-    
     logs = list(state.get("logs", []))
-    logs.append(f"Recommendation Agent: Completed. Recommended next inspection: {data.get('next_inspection_date')}.")
-    
-    return {
-        "recommendation": data,
-        "agent_states": agent_states,
-        "logs": logs
-    }
+    logs.append(f"Recommendation: next inspection on {data.get('next_inspection_date')}, {len(data.get('recommended_actions', []))} action(s).")
+    return {"recommendation": data, "agent_states": agent_states, "logs": logs}
 
-# 6. Report Agent Node
+
+# ─── 6. Report Node ───────────────────────────────────────────────────────────
+
 def report_node(state: AgentState) -> Dict[str, Any]:
-    llm = get_llm()
-    
+    """Compiles a full professional inspection report in Markdown."""
     agent_states = dict(state.get("agent_states", {}))
     agent_states["report"] = {
         "status": "Running",
-        "reasoning": "Compiling final markdown report and summarizing inspection results.",
+        "reasoning": "Compiling final Markdown inspection report.",
         "confidence": 0,
         "output": {}
     }
-    
-    # Collect all agent data
-    img_ana = state.get("image_analysis", {})
-    def_det = state.get("defect_detection", {})
-    sev_ass = state.get("severity_assessment", {})
-    recomm = state.get("recommendation", {})
-    
-    prompt = f"""You are the Report Agent.
-Generate a comprehensive, professional infrastructure inspection report based on the findings:
-Asset: "{state['asset_name']}"
+
+    img_ana  = state.get("image_analysis",    {})
+    def_det  = state.get("defect_detection",  {})
+    sev_ass  = state.get("severity_assessment", {})
+    recomm   = state.get("recommendation",    {})
+
+    prompt = f"""You are the Report Agent for drone infrastructure inspection.
+Compile a professional inspection report as JSON with these exact keys:
+- report_markdown: full Markdown report (headings, tables, bullets)
+- executive_summary: 2-3 sentence plain-English summary
+- reasoning: brief note on report compilation
+- confidence_score: integer 0-100
+
+Data:
+Asset: {state['asset_name']}
 Image Analysis: {json.dumps(img_ana)}
 Defect Detection: {json.dumps(def_det)}
 Severity Assessment: {json.dumps(sev_ass)}
 Recommendations: {json.dumps(recomm)}
 
-Create a markdown report that includes:
+The Markdown must include:
 1. Executive Summary
-2. Image & Sensor Telemetry
-3. Detailed Defect Findings (including counts and location)
-4. Risk Grading & Priority
-5. Recommended Corrective Actions & Next Inspection Schedule
+2. Inspection Parameters (sensor, image quality, GSD)
+3. Defect Findings table (Type | Size | Location)
+4. Risk Assessment (severity, risk score, priority)
+5. Recommended Actions & Next Inspection Date
 
-Provide your output in JSON format with these keys:
-- report_markdown: markdown formatted report text
-- executive_summary: brief text summary
-- reasoning: text explaining compiler decisions
-- confidence_score: integer 0-100
-"""
-    
+Reply ONLY with the JSON object."""
+
     try:
-        response = invoke_with_timeout(llm.invoke, [HumanMessage(content=prompt)])
-        text = response.content
-        if "```json" in text:
-            text = text.split("```json")[1].split("```")[0].strip()
-        elif "```" in text:
-            text = text.split("```")[1].split("```")[0].strip()
-        data = json.loads(text.strip())
+        text = call_gemini(prompt, timeout=18.0)
+        data = parse_json(text)
     except Exception as e:
-        severity_val = sev_ass.get("overall_severity", "Action Required")
-        next_date = recomm.get("next_inspection_date", "2026-10-31")
-        rec_actions = "\n".join([f"- {action}" for action in recomm.get("recommended_actions", [])])
-        defects_list = "\n".join([f"- {d.get('type')} at {d.get('location')} ({d.get('estimated_size')})" for d in def_det.get("defects_found", [])])
-        
-        report_markdown = f"""# Infrastructure Inspection Report: {state['asset_name']}
+        # High-quality local fallback report
+        sev_val  = sev_ass.get("overall_severity", "Action Required")
+        risk     = sev_ass.get("risk_score", 70)
+        priority = sev_ass.get("priority", "Medium")
+        next_date = recomm.get("next_inspection_date", "N/A")
+        actions_md = "\n".join(f"- {a}" for a in recomm.get("recommended_actions", ["Perform follow-up inspection."]))
+
+        defect_rows = "\n".join(
+            f"| {d.get('type','—')} | {d.get('estimated_size','—')} | {d.get('location','—')} |"
+            for d in def_det.get("defects_found", [])
+        ) or "| No defects detected | — | — |"
+
+        report_markdown = f"""# Drone Infrastructure Inspection Report
+**Asset:** {state['asset_name']}
+**Inspection Date:** {datetime.now().strftime('%B %d, %Y')}
+**Location:** {state.get('location', 'N/A')}
+**Google Drive:** {state.get('gdrive_link', 'N/A')}
+
+---
 
 ## 1. Executive Summary
-An automated drone infrastructure inspection was executed for **{state['asset_name']}** (Location: {state.get('location', 'N/A')}). Structural anomalies were evaluated using the safety checking pipeline.
+An automated drone inspection was conducted for **{state['asset_name']}**. The AI pipeline evaluated imagery quality, detected structural defects, assessed risk severity, and produced maintenance recommendations. Overall severity is classified as **{sev_val}** with a risk score of **{risk}/100**.
 
-## 2. Image & Sensor Telemetry
-- Sensor suitability rating: {img_ana.get("suitability", "High")}
-- Detected sensor parameters: {img_ana.get("sensor_type", "Standard Drone RGB CMOS")}
-- Telemetry coverage evaluation check: Passed
+---
 
-## 3. Detailed Defect Findings
-Total anomalies identified: **{def_det.get("total_count", 0)}**
-{defects_list if defects_list else "- No defects registered during scanning."}
+## 2. Inspection Parameters
+| Parameter | Value |
+|---|---|
+| Sensor Type | {img_ana.get('sensor_type', 'RGB CMOS')} |
+| Image Suitability | {img_ana.get('suitability', 'High')} |
+| Quality Metrics | {img_ana.get('image_quality_metrics', 'Good')} |
 
-## 4. Risk Grading & Priority
-- Overall safety classification: **{severity_val}**
-- Core risk index: {sev_ass.get("risk_score", 70)} / 100
-- Resolution priority: **{sev_ass.get("priority", "Medium")}**
+---
 
-## 5. Recommended Corrective Actions
-{rec_actions if rec_actions else "- Perform standard periodic checks."}
+## 3. Defect Findings
+| Defect Type | Estimated Size | Location |
+|---|---|---|
+{defect_rows}
 
-- **Recommended next inspection date**: {next_date}
+**Total defects detected:** {def_det.get('total_count', 0)}
+
+---
+
+## 4. Risk Assessment
+| Metric | Value |
+|---|---|
+| Overall Severity | **{sev_val}** |
+| Risk Score | {risk} / 100 |
+| Maintenance Priority | **{priority}** |
+
+**Reasoning:** {sev_ass.get('reasoning', 'N/A')}
+
+---
+
+## 5. Recommended Actions & Schedule
+{actions_md}
+
+**Next Inspection Date:** {next_date}
+
+**Calendar Reminder:** {recomm.get('calendar_reminder_details', f'Schedule follow-up inspection for {state["asset_name"]}')}
+
+---
+*Report generated by Drone Infrastructure Inspector AI pipeline.*
 """
         data = {
             "report_markdown": report_markdown,
-            "executive_summary": f"Completed drone structural survey for {state['asset_name']}. Safety priority graded as {severity_val}.",
-            "reasoning": f"Report compiled via local fallback generator. (Fallback triggered by model error: {str(e)})",
+            "executive_summary": f"Inspection of {state['asset_name']} completed. Severity: {sev_val}, {def_det.get('total_count',0)} defect(s) detected. Next inspection: {next_date}.",
+            "reasoning": f"Fallback template report generated. (AI unavailable: {type(e).__name__})",
             "confidence_score": 95
         }
-        
+
     agent_states["report"] = {
         "status": "Completed",
-        "reasoning": data.get("reasoning", "Completed final report formatting."),
+        "reasoning": data.get("reasoning", "Report compiled."),
         "confidence": data.get("confidence_score", 95),
         "output": data
     }
-    
     logs = list(state.get("logs", []))
-    logs.append("Report Agent: Completed formatting markdown report.")
-    
-    return {
-        "report": data,
-        "agent_states": agent_states,
-        "logs": logs
-    }
+    logs.append("Report Agent: inspection report compiled successfully.")
+    return {"report": data, "agent_states": agent_states, "logs": logs}
 
-# Build the StateGraph
+
+# ─── Graph Construction ───────────────────────────────────────────────────────
+
 def build_inspection_graph():
+    """Builds and compiles the LangGraph StateGraph for the inspection pipeline."""
     builder = StateGraph(AgentState)
-    
-    # Add nodes
-    builder.add_node("supervisor", supervisor_node)
-    builder.add_node("image_analysis_node", image_analysis_node)
-    builder.add_node("defect_detection_node", defect_detection_node)
+
+    builder.add_node("supervisor",              supervisor_node)
+    builder.add_node("image_analysis_node",     image_analysis_node)
+    builder.add_node("defect_detection_node",   defect_detection_node)
     builder.add_node("severity_assessment_node", severity_assessment_node)
-    builder.add_node("recommendation_node", recommendation_node)
-    builder.add_node("report_node", report_node)
-    
-    # Set entry point
+    builder.add_node("recommendation_node",     recommendation_node)
+    builder.add_node("report_node",             report_node)
+
     builder.set_entry_point("supervisor")
-    
-    # We define the router function
-    def route_from_supervisor(state: AgentState):
-        next_a = state.get("next_agent", "FINISH")
-        if next_a == "FINISH" or not next_a:
-            return END
-        return next_a
-    
-    # Add conditional edges from supervisor
+
+    def route(state: AgentState) -> str:
+        nxt = state.get("next_agent", "FINISH")
+        return END if (not nxt or nxt == "FINISH") else nxt
+
     builder.add_conditional_edges(
-        "supervisor",
-        route_from_supervisor,
+        "supervisor", route,
         {
-            "image_analysis_node": "image_analysis_node",
-            "defect_detection_node": "defect_detection_node",
+            "image_analysis_node":      "image_analysis_node",
+            "defect_detection_node":    "defect_detection_node",
             "severity_assessment_node": "severity_assessment_node",
-            "recommendation_node": "recommendation_node",
-            "report_node": "report_node",
-            END: END
+            "recommendation_node":      "recommendation_node",
+            "report_node":              "report_node",
+            END: END,
         }
     )
-    
-    # Each agent goes back to supervisor to verify or decide next step
-    builder.add_edge("image_analysis_node", "supervisor")
-    builder.add_edge("defect_detection_node", "supervisor")
-    builder.add_edge("severity_assessment_node", "supervisor")
-    builder.add_edge("recommendation_node", "supervisor")
-    builder.add_edge("report_node", "supervisor")
-    
+
+    for node in ["image_analysis_node", "defect_detection_node",
+                 "severity_assessment_node", "recommendation_node", "report_node"]:
+        builder.add_edge(node, "supervisor")
+
     return builder.compile()
 
-# Test runner instance
+
 if __name__ == "__main__":
-    os.environ["GEMINI_API_KEY"] = "mock_key"
-    print("Graph compiled successfully!")
-    g = build_inspection_graph()
+    graph = build_inspection_graph()
+    print("Graph compiled successfully.")

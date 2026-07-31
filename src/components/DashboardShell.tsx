@@ -140,6 +140,7 @@ export default function DashboardShell({ onSignOut }: DashboardShellProps) {
                 <button
                   key={item.id}
                   onClick={() => {
+                    if (item.id !== "inspections") setInspectedAsset(null);
                     setActiveTab(item.id);
                     setIsMobileOpen(false);
                   }}
