@@ -145,7 +145,12 @@ def image_analysis_node(state: AgentState) -> Dict[str, Any]:
     }
 
     gdrive = str(state.get("gdrive_link", "")).lower()
-    if any(ext in gdrive for ext in ["video", ".mp4", ".mov", ".avi", ".mkv", "presentation"]):
+    images = [str(img).lower() for img in state.get("images", [])]
+    video_exts = ["video", ".mp4", ".mov", ".avi", ".mkv", "presentation", "webm"]
+    
+    has_video = any(ext in gdrive for ext in video_exts) or any(ext in img for img in images for ext in video_exts)
+    
+    if has_video:
         raise ValueError("Pipeline aborted: Target resource is a compressed video stream file. Automated defect mapping requires raw high-resolution orthomosaic drone images.")
 
     prompt = f"""You are the Image Analysis Agent for drone infrastructure inspection.
