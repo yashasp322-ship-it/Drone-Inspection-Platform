@@ -5,48 +5,41 @@ from typing import Dict, Any, List, TypedDict, Literal, Optional
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
-import google.generativeai as genai
-from google.api_core import retry as api_retry
+from groq import Groq
 from langgraph.graph import StateGraph, END
 
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 load_dotenv()
 
-# ─── Gemini Direct SDK helper (no LangChain retry loops) ─────────────────────
+# ─── Groq SDK helper ─────────────────────────────────────────────────────────
+# Using llama-3.3-70b-versatile — Groq's best free model, no daily quota.
 
-def call_gemini(prompt: str, timeout: float = 15.0) -> str:
+GROQ_MODEL = "llama-3.3-70b-versatile"
+
+def call_ai(prompt: str, timeout: float = 30.0) -> str:
     """
-    Calls Gemini API directly via the google-generativeai SDK.
-    Uses a thread-based timeout so 429/quota errors surface immediately
-    without any internal tenacity retry loop.
+    Calls Groq API (llama-3.3-70b-versatile) with a thread-based timeout.
+    Falls back gracefully if the key is missing or the call fails.
     """
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is not set.")
+        raise ValueError("GROQ_API_KEY environment variable is not set.")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        "gemini-3.5-flash",
-        generation_config=genai.GenerationConfig(temperature=0.3)
-    )
-
-    # No-retry policy: raise immediately on any error
-    no_retry = api_retry.Retry(
-        predicate=api_retry.if_exception_type(),  # match nothing = no retry
-        initial=0, multiplier=1, deadline=timeout
-    )
+    client = Groq(api_key=api_key)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
         future = ex.submit(
-            model.generate_content,
-            prompt,
-            request_options={"retry": no_retry}
+            client.chat.completions.create,
+            model=GROQ_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2048,
         )
         try:
             response = future.result(timeout=timeout)
-            return response.text
+            return response.choices[0].message.content
         except concurrent.futures.TimeoutError:
-            raise TimeoutError(f"Gemini call timed out after {timeout}s")
+            raise TimeoutError(f"Groq call timed out after {timeout}s")
 
 
 def parse_json(text: str) -> Dict[str, Any]:
@@ -108,7 +101,7 @@ Rules:
 
 Reply only with the JSON object, no other text."""
 
-        text = call_gemini(prompt, timeout=12.0)
+        text = call_ai(prompt, timeout=12.0)
         parsed = parse_json(text)
         next_agent = parsed.get("next_agent", "")
         reasoning = parsed.get("reasoning", "Supervisor decision via Gemini.")
@@ -175,7 +168,7 @@ Reply ONLY with a JSON object using these exact keys:
 }}"""
 
     try:
-        text = call_gemini(prompt, timeout=15.0)
+        text = call_ai(prompt, timeout=15.0)
         data = parse_json(text)
     except Exception as e:
         data = {
@@ -231,7 +224,7 @@ Reply ONLY with a JSON object:
 }}"""
 
     try:
-        text = call_gemini(prompt, timeout=15.0)
+        text = call_ai(prompt, timeout=15.0)
         data = parse_json(text)
     except Exception as e:
         name = state["asset_name"].lower()
@@ -292,7 +285,7 @@ Grade the overall structural risk:
 Reply ONLY with a JSON object using those exact keys."""
 
     try:
-        text = call_gemini(prompt, timeout=15.0)
+        text = call_ai(prompt, timeout=15.0)
         data = parse_json(text)
     except Exception as e:
         count = defects.get("total_count", 0)
@@ -359,7 +352,7 @@ Reply ONLY with a JSON object:
 }}"""
 
     try:
-        text = call_gemini(prompt, timeout=15.0)
+        text = call_ai(prompt, timeout=15.0)
         data = parse_json(text)
     except Exception as e:
         sev_val = severity.get("overall_severity", "Action Required")
@@ -447,7 +440,7 @@ The Markdown must include:
 Reply ONLY with the JSON object."""
 
     try:
-        text = call_gemini(prompt, timeout=18.0)
+        text = call_ai(prompt, timeout=18.0)
         data = parse_json(text)
     except Exception as e:
         # High-quality local fallback report
