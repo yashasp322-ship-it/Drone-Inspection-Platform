@@ -85,12 +85,15 @@ const SEVERITY_CONFIG: Record<string, { color: string; bg: string; border: strin
   High:             { color: "text-red-400",      bg: "bg-red-500/10",     border: "border-red-500/30",     dot: "bg-red-400"     },
 };
 
-const AGENT_COLORS: Record<string, string> = {
-  blue:    "from-blue-500/20 border-blue-500/30 text-blue-400",
-  purple:  "from-purple-500/20 border-purple-500/30 text-purple-400",
-  orange:  "from-orange-500/20 border-orange-500/30 text-orange-400",
-  yellow:  "from-yellow-500/20 border-yellow-500/30 text-yellow-400",
-  emerald: "from-emerald-500/20 border-emerald-500/30 text-emerald-400",
+// Tailwind's JIT scanner only picks up class names that appear literally in
+// source — `border-${color}-500/30`-style interpolation silently produces no
+// CSS at all, so every one of these needs to be a static, fully-spelled key.
+const AGENT_COLORS: Record<string, { gradientFrom: string; border: string; text: string; bgSoft: string }> = {
+  blue:    { gradientFrom: "from-blue-500/20",    border: "border-blue-500/30",    text: "text-blue-400",    bgSoft: "bg-blue-500/20" },
+  purple:  { gradientFrom: "from-purple-500/20",  border: "border-purple-500/30",  text: "text-purple-400",  bgSoft: "bg-purple-500/20" },
+  orange:  { gradientFrom: "from-orange-500/20",  border: "border-orange-500/30",  text: "text-orange-400",  bgSoft: "bg-orange-500/20" },
+  yellow:  { gradientFrom: "from-yellow-500/20",  border: "border-yellow-500/30",  text: "text-yellow-400",  bgSoft: "bg-yellow-500/20" },
+  emerald: { gradientFrom: "from-emerald-500/20", border: "border-emerald-500/30", text: "text-emerald-400", bgSoft: "bg-emerald-500/20" },
 };
 
 const STATUS_ICON = {
@@ -115,13 +118,16 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
   const [uploading, setUploading] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
   const [logs, setLogs] = useState<string[]>([]);
-  const [activeAgent, setActiveAgent] = useState<string>("");
   const [pipelineState, setPipelineState] = useState<InspectionRunState>(initPipeline());
   const [finalReport, setFinalReport] = useState<any | null>(null);
   const [activeTab, setActiveTab] = useState<"pipeline" | "report" | "defects">("pipeline");
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
+  const [ranWithoutImages, setRanWithoutImages] = useState(false);
+  const [pipelineError, setPipelineError] = useState<string | null>(null);
+  const [hasRunOnce, setHasRunOnce] = useState(false);
   const hasTriggeredRef = useRef(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const activeAgentRef = useRef<string>("");
   const completedCount = Object.values(pipelineState).filter(s => s.status === "Completed").length;
   const progressPct = Math.round((completedCount / 5) * 100);
 
@@ -138,11 +144,15 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
     if (!inspectedAsset) fetchInspections();
   }, [inspectedAsset]);
 
+  // Intentionally does NOT auto-run the pipeline on open: it used to fire
+  // immediately on mount, before the user had any chance to upload real
+  // drone photos, so the very first run always analyzed zero images and
+  // fell back to heuristic output. Now the user must upload images (or
+  // knowingly skip that) and press "Start AI Inspection" themselves.
   useEffect(() => {
-    if (inspectedAsset && !hasTriggeredRef.current) {
-      hasTriggeredRef.current = true;
-      runAutomatedInspection([]);
-    }
+    hasTriggeredRef.current = false;
+    setUploadedImages([]);
+    setHasRunOnce(false);
   }, [inspectedAsset]);
 
   useEffect(() => {
@@ -171,17 +181,26 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
       ...prev,
       [agentId]: { ...prev[agentId as keyof InspectionRunState], status: "Running" }
     }));
-    setActiveAgent(agentId);
+    activeAgentRef.current = agentId;
   };
 
   const runAutomatedInspection = async (manualUrls: string[]) => {
     if (!inspectedAsset) return;
+    setHasRunOnce(true);
     setIsRunning(true);
     setFinalReport(null);
+    setPipelineError(null);
     setActiveTab("pipeline");
-    setActiveAgent("");
+    activeAgentRef.current = "";
     setPipelineState(initPipeline());
     setLogs(["⚡ Supervisor Agent initialized. Orchestrating AI pipeline..."]);
+
+    const imagesToSend = manualUrls.length > 0 ? manualUrls : uploadedImages;
+    const noRealImages = imagesToSend.length === 0;
+    setRanWithoutImages(noRealImages);
+    if (noRealImages) {
+      setLogs(prev => [...prev, "⚠ No drone images uploaded for this run — agents will fall back to non-visual heuristic analysis."]);
+    }
 
     try {
       const res = await fetch("http://localhost:5001/api/inspections/stream", {
@@ -189,7 +208,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           assetId: inspectedAsset.id,
-          images: manualUrls.length > 0 ? manualUrls : uploadedImages
+          images: imagesToSend
         })
       });
 
@@ -247,16 +266,12 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
             } else if (update.event === "error") {
               setLogs(prev => [...prev, `✕ Error: ${update.message}`]);
               setIsRunning(false);
-              setPipelineState(prev => {
-                const next = { ...prev };
-                if (activeAgent && next[activeAgent as keyof InspectionRunState]) {
-                  next[activeAgent as keyof InspectionRunState].status = "Failed";
-                } else if (!activeAgent) {
-                  // Fallback: if no active agent yet, fail the first one
-                  next.image_analysis.status = "Failed";
-                }
-                return next;
-              });
+              setPipelineError(update.message || "The AI pipeline failed unexpectedly.");
+              const failedAgent = (activeAgentRef.current || "image_analysis") as keyof InspectionRunState;
+              setPipelineState(prev => ({
+                ...prev,
+                [failedAgent]: { ...prev[failedAgent], status: "Failed", reasoning: update.message || prev[failedAgent].reasoning }
+              }));
             }
           } catch (e) { /* skip bad JSON */ }
         }
@@ -264,6 +279,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
     } catch (err: any) {
       setLogs(prev => [...prev, `✕ Pipeline failed: ${err.message}`]);
       setIsRunning(false);
+      setPipelineError(err.message || "The AI pipeline failed unexpectedly.");
     }
   };
 
@@ -288,7 +304,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
         setLogs(prev => [...prev, "🎉 Report saved and available in Reports tab!"]);
       }
     } catch { }
-    finally { setIsRunning(false); setActiveAgent(""); }
+    finally { setIsRunning(false); activeAgentRef.current = ""; }
   };
 
   const getCalendarUrl = (report: any) => {
@@ -361,7 +377,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
               </a>
             )}
             <button
-              onClick={() => { hasTriggeredRef.current = false; runAutomatedInspection([]); }}
+              onClick={() => runAutomatedInspection([])}
               disabled={isRunning || uploading}
               className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg ${
                 isRunning
@@ -371,11 +387,37 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
             >
               {isRunning
                 ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running AI...</>
-                : <><Zap className="w-3.5 h-3.5 fill-current" /> Re-run Inspection</>
+                : hasRunOnce
+                ? <><Zap className="w-3.5 h-3.5 fill-current" /> Re-run Inspection</>
+                : <><Play className="w-3.5 h-3.5 fill-current" /> Start AI Inspection</>
               }
             </button>
           </div>
         </div>
+
+        {/* ── Pipeline error banner ── */}
+        {pipelineError && !isRunning && (
+          <div className="mb-5 bg-red-500/10 border border-red-500/30 rounded-2xl p-3.5 flex items-start gap-2.5">
+            <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-red-300">Inspection pipeline failed</p>
+              <p className="text-xs text-red-200/80 leading-relaxed mt-0.5">{pipelineError}</p>
+            </div>
+          </div>
+        )}
+
+        {/* ── No-real-images warning ── */}
+        {ranWithoutImages && (isRunning || finalReport) && (
+          <div className="mb-5 bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-3.5 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-yellow-400 flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-yellow-200/90 leading-relaxed">
+              <span className="font-bold">No drone images were uploaded</span> for this run. The Image Analysis
+              and Defect Detection agents could not visually inspect real imagery and fell back to non-visual
+              heuristic output — treat these results as a placeholder, not a real inspection. Upload actual
+              drone photos below and re-run for a genuine analysis.
+            </p>
+          </div>
+        )}
 
         {/* ── Progress Header ── */}
         {(isRunning || finalReport) && (
@@ -395,7 +437,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
               />
             </div>
             <div className="relative flex justify-between mt-2">
-              {AGENTS.map((a, i) => (
+              {AGENTS.map((a) => (
                 <div key={a.id} className="flex flex-col items-center gap-1">
                   <div className={`w-2 h-2 rounded-full transition-all duration-500 ${
                     pipelineState[a.id as keyof InspectionRunState].status === "Completed" ? "bg-emerald-400 shadow-emerald-400/50 shadow-sm" :
@@ -437,9 +479,22 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
             {/* ─── PIPELINE TAB ─── */}
             {activeTab === "pipeline" && (
               <div className="space-y-3">
+                {!hasRunOnce && !isRunning && (
+                  <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-3.5 flex items-start gap-2.5">
+                    <Upload className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
+                    <p className="text-xs text-blue-200/90 leading-relaxed">
+                      Upload real drone photos below first, then click <span className="font-bold">Start AI Inspection</span> above
+                      so the Image Analysis and Defect Detection agents can analyze actual imagery instead of falling back to
+                      generic heuristic output.
+                    </p>
+                  </div>
+                )}
                 {AGENTS.map((agent, idx) => {
                   const st = pipelineState[agent.id as keyof InspectionRunState];
-                  const isActive = activeAgent === agent.id || st.status === "Running";
+                  // Derived purely from st.status (not activeAgent) so a Failed
+                  // node stops rendering as "Running"/spinning once it fails —
+                  // activeAgent isn't reliably cleared on failure/completion.
+                  const isActive = st.status === "Running";
                   const colors = AGENT_COLORS[agent.color];
                   const Icon = agent.icon;
 
@@ -449,7 +504,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
                       onClick={() => setExpandedAgent(expandedAgent === agent.id ? null : agent.id)}
                       className={`group relative rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden ${
                         isActive
-                          ? `bg-gradient-to-r ${colors.split(" ")[0]} border-${agent.color}-500/30 shadow-lg`
+                          ? `bg-gradient-to-r ${colors.gradientFrom} ${colors.border} shadow-lg`
                           : st.status === "Completed"
                           ? "bg-white/[0.03] border-white/10 hover:border-white/20"
                           : "bg-white/[0.02] border-white/5 hover:border-white/10"
@@ -476,10 +531,8 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
                         </div>
 
                         {/* Icon */}
-                        <div className={`p-2 rounded-lg ${
-                          isActive ? `bg-gradient-to-br ${colors.split(" ")[0]} bg-opacity-20` : "bg-white/5"
-                        }`}>
-                          <Icon className={`w-4 h-4 ${isActive || st.status === "Completed" ? colors.split(" ")[2] : "text-gray-500"}`} />
+                        <div className={`p-2 rounded-lg ${isActive ? colors.bgSoft : "bg-white/5"}`}>
+                          <Icon className={`w-4 h-4 ${isActive || st.status === "Completed" ? colors.text : "text-gray-500"}`} />
                         </div>
 
                         {/* Info */}
@@ -492,7 +545,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
                               st.status === "Completed" ? "bg-emerald-500/10 text-emerald-400" :
                               isActive ? "bg-blue-500/10 text-blue-400 animate-pulse" :
                               "bg-white/5 text-gray-500"
-                            }`}>{isActive ? "Running" : st.status}</span>
+                            }`}>{st.status}</span>
                           </div>
                           <p className="text-[10px] text-gray-500 mt-0.5 truncate">{agent.short}</p>
                           {st.status !== "Waiting" && (
@@ -505,7 +558,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
                           {st.confidence > 0 && (
                             <div className="text-right">
                               <span className="text-[9px] text-gray-500 block font-semibold uppercase">Confidence</span>
-                              <span className={`text-sm font-black font-mono ${colors.split(" ")[2]}`}>{st.confidence}%</span>
+                              <span className={`text-sm font-black font-mono ${colors.text}`}>{st.confidence}%</span>
                             </div>
                           )}
                           {st.status !== "Waiting" && (
@@ -592,9 +645,13 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
                   </div>
                   {defects.length === 0 ? (
                     <div className="p-8 text-center">
-                      {pipelineState.defect_detection.status === "Waiting"
-                        ? <p className="text-xs text-gray-500">Run inspection to detect defects</p>
-                        : <p className="text-xs text-emerald-400">No structural defects detected ✓</p>
+                      {pipelineState.defect_detection.status === "Completed"
+                        ? <p className="text-xs text-emerald-400">No structural defects detected ✓</p>
+                        : pipelineState.defect_detection.status === "Running"
+                        ? <p className="text-xs text-blue-400">Scanning imagery for defects...</p>
+                        : pipelineState.defect_detection.status === "Failed"
+                        ? <p className="text-xs text-red-400">Defect scan failed — see logs</p>
+                        : <p className="text-xs text-gray-500">Run inspection to detect defects</p>
                       }
                     </div>
                   ) : (
@@ -809,7 +866,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
               <div className="space-y-2">
                 {AGENTS.map((a) => {
                   const st = pipelineState[a.id as keyof InspectionRunState];
-                  const isAct = activeAgent === a.id || st.status === "Running";
+                  const isAct = st.status === "Running";
                   return (
                     <div key={a.id} className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -824,7 +881,7 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
                         {st.confidence > 0 && (
                           <span className="text-[9px] font-mono text-gray-500">{st.confidence}%</span>
                         )}
-                        {STATUS_ICON[isAct ? "Running" : st.status]}
+                        {STATUS_ICON[st.status]}
                       </div>
                     </div>
                   );

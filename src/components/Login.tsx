@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Lock, Mail, ShieldAlert } from "lucide-react";
 
 interface LoginProps {
-  onLoginSuccess: () => void;
+  onLoginSuccess: (email: string) => void;
   onBackToHome: () => void;
 }
 
@@ -22,7 +22,7 @@ export default function Login({ onLoginSuccess, onBackToHome }: LoginProps) {
     setTimeout(() => {
       if (email === "admin@gmail.com" && password === "password") {
         setIsLoading(false);
-        onLoginSuccess();
+        onLoginSuccess(email);
       } else {
         setIsLoading(false);
         setError("Invalid email or password. Hint: admin@gmail.com / password");

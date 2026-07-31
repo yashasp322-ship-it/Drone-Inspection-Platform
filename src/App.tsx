@@ -14,10 +14,12 @@ import DashboardShell from "./components/DashboardShell";
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [userEmail, setUserEmail] = useState("");
 
   if (isLoggedIn) {
     return (
       <DashboardShell
+        userEmail={userEmail}
         onSignOut={() => setIsLoggedIn(false)}
       />
     );
@@ -26,7 +28,8 @@ export default function App() {
   if (showLogin && !isLoggedIn) {
     return (
       <Login
-        onLoginSuccess={() => {
+        onLoginSuccess={(email) => {
+          setUserEmail(email);
           setIsLoggedIn(true);
           setShowLogin(false);
         }}

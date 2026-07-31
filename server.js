@@ -101,18 +101,27 @@ const readDB = () => {
           anomaliesCount: 4
         }
       ];
-      fs.writeFileSync(DB_FILE, JSON.stringify({ assets: defaultAssets, missions: defaultMissions }, null, 2));
-      return { assets: defaultAssets, missions: defaultMissions };
+      const defaultTeam = [
+        { id: "t1", name: "John Doe", email: "admin@gmail.com", role: "Administrator", status: "Active", createdAt: new Date().toISOString() },
+        { id: "t2", name: "Sarah Jenkins", email: "sarah.j@company.com", role: "Quality Analyst", status: "Active", createdAt: new Date().toISOString() },
+        { id: "t3", name: "Alex Carter", email: "alex.c@company.com", role: "Drone Pilot (FAA Part 107)", status: "Active", createdAt: new Date().toISOString() },
+        { id: "t4", name: "Elena Rostova", email: "elena.r@company.com", role: "BIM Engineer", status: "Active", createdAt: new Date().toISOString() }
+      ];
+      fs.writeFileSync(DB_FILE, JSON.stringify({ assets: defaultAssets, missions: defaultMissions, team: defaultTeam }, null, 2));
+      return { assets: defaultAssets, missions: defaultMissions, team: defaultTeam };
     }
     const data = fs.readFileSync(DB_FILE, "utf-8");
     const parsed = JSON.parse(data);
     if (!parsed.missions) {
       parsed.missions = [];
     }
+    if (!parsed.team) {
+      parsed.team = [];
+    }
     return parsed;
   } catch (err) {
     console.error("Error reading database file", err);
-    return { assets: [], missions: [] };
+    return { assets: [], missions: [], team: [] };
   }
 };
 
@@ -143,7 +152,7 @@ app.get("/assets/:id", (req, res) => {
 
 // 3. POST /assets - Create a new asset
 app.post("/assets", (req, res) => {
-  const { name, infrastructureType, location, thumbnail, inspectionPageId, gDriveLink, status } = req.body;
+  const { name, infrastructureType, location, thumbnail, inspectionPageId, gDriveLink, mapLink, lat, lng, status, assignedTo } = req.body;
   if (!name || !infrastructureType || !location) {
     return res.status(400).json({ error: "Missing required fields (name, infrastructureType, location)" });
   }
@@ -157,7 +166,11 @@ app.post("/assets", (req, res) => {
     thumbnail: thumbnail || "https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=150&q=80",
     inspectionPageId: inspectionPageId || "custom-inspect-id",
     gDriveLink: gDriveLink || "",
+    mapLink: mapLink || "",
+    lat: lat !== undefined ? lat : null,
+    lng: lng !== undefined ? lng : null,
     status: status || "Passed",
+    assignedTo: assignedTo || null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
@@ -176,7 +189,7 @@ app.put("/assets/:id", (req, res) => {
   }
 
   const existing = db.assets[assetIdx];
-  const { name, infrastructureType, location, thumbnail, inspectionPageId, gDriveLink, status } = req.body;
+  const { name, infrastructureType, location, thumbnail, inspectionPageId, gDriveLink, mapLink, lat, lng, status, assignedTo } = req.body;
 
   const updatedAsset = {
     ...existing,
@@ -186,7 +199,11 @@ app.put("/assets/:id", (req, res) => {
     thumbnail: thumbnail !== undefined ? thumbnail : existing.thumbnail,
     inspectionPageId: inspectionPageId !== undefined ? inspectionPageId : existing.inspectionPageId,
     gDriveLink: gDriveLink !== undefined ? gDriveLink : existing.gDriveLink,
+    mapLink: mapLink !== undefined ? mapLink : existing.mapLink,
+    lat: lat !== undefined ? lat : existing.lat,
+    lng: lng !== undefined ? lng : existing.lng,
     status: status !== undefined ? status : existing.status,
+    assignedTo: assignedTo !== undefined ? assignedTo : existing.assignedTo,
     updatedAt: new Date().toISOString()
   };
 
@@ -206,6 +223,68 @@ app.delete("/assets/:id", (req, res) => {
   db.assets.splice(assetIdx, 1);
   writeDB(db);
   res.json({ message: "Asset successfully deleted" });
+});
+
+// Team routes
+app.get("/team", (req, res) => {
+  const db = readDB();
+  res.json(db.team || []);
+});
+
+app.post("/team", (req, res) => {
+  const { name, email, role, status } = req.body;
+  if (!name || !email || !role) {
+    return res.status(400).json({ error: "Missing required fields (name, email, role)" });
+  }
+
+  const db = readDB();
+  if (!db.team) db.team = [];
+  const newMember = {
+    id: String(Date.now()),
+    name,
+    email,
+    role,
+    status: status || "Active",
+    createdAt: new Date().toISOString()
+  };
+
+  db.team.push(newMember);
+  writeDB(db);
+  res.status(201).json(newMember);
+});
+
+app.put("/team/:id", (req, res) => {
+  const db = readDB();
+  const idx = (db.team || []).findIndex((m) => m.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Team member not found" });
+  }
+
+  const existing = db.team[idx];
+  const { name, email, role, status } = req.body;
+  const updatedMember = {
+    ...existing,
+    name: name !== undefined ? name : existing.name,
+    email: email !== undefined ? email : existing.email,
+    role: role !== undefined ? role : existing.role,
+    status: status !== undefined ? status : existing.status
+  };
+
+  db.team[idx] = updatedMember;
+  writeDB(db);
+  res.json(updatedMember);
+});
+
+app.delete("/team/:id", (req, res) => {
+  const db = readDB();
+  const idx = (db.team || []).findIndex((m) => m.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: "Team member not found" });
+  }
+
+  db.team.splice(idx, 1);
+  writeDB(db);
+  res.json({ message: "Team member successfully removed" });
 });
 
 // Live Mission Simulation state
@@ -659,20 +738,14 @@ app.post("/api/inspections/stream", async (req, res) => {
     return res.status(404).json({ error: "Asset not found" });
   }
 
-  // Fallback to high-res Unsplash drone images matching asset type if no images provided
-  let inspectionImages = images || [];
-  if (inspectionImages.length === 0) {
-    const type = (asset.infrastructureType || "").toLowerCase();
-    if (type.includes("bridge") || type.includes("obj")) {
-      inspectionImages = ["https://images.unsplash.com/photo-1541888946425-d81bb19240f5?auto=format&fit=crop&w=800&q=80"];
-    } else if (type.includes("solar") || type.includes("tiff")) {
-      inspectionImages = ["https://images.unsplash.com/photo-1508514177221-188b1cf16e9d?auto=format&fit=crop&w=800&q=80"];
-    } else if (type.includes("wind") || type.includes("cad") || type.includes("blueprint")) {
-      inspectionImages = ["https://images.unsplash.com/photo-1466611653911-95081537e5b7?auto=format&fit=crop&w=800&q=80"];
-    } else {
-      inspectionImages = ["https://images.unsplash.com/photo-1584824486509-112e4181ff6b?auto=format&fit=crop&w=800&q=80"];
-    }
-  }
+  // Only pass through images actually provided by the caller (manual uploads).
+  // We used to substitute a generic stock Unsplash photo here when none were
+  // uploaded, which made the AI "analyze" an image completely unrelated to the
+  // real asset and produce misleading results. If no real images were
+  // uploaded, the pipeline now runs without image evidence and the agents
+  // fall back honestly to heuristic (clearly labeled) output instead of
+  // fabricating a vision analysis of a stock photo.
+  const inspectionImages = images || [];
 
   try {
     // Send POST to python LangGraph service streaming endpoint

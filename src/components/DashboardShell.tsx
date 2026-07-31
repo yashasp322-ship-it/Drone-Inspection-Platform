@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   LayoutDashboard,
   Folder,
-  Plane,
+  MessagesSquare,
   ClipboardCheck,
   FileText,
   Users,
@@ -12,7 +12,7 @@ import {
   X
 } from "lucide-react";
 import DashboardHome from "./DashboardHome";
-import FlightsView from "./FlightsView";
+import AIDiscussionView from "./AIDiscussionView";
 import AssetsView from "./AssetsView";
 import InspectionsView from "./InspectionsView";
 import ReportsView from "./ReportsView";
@@ -32,12 +32,13 @@ interface Asset {
 }
 
 interface DashboardShellProps {
+  userEmail: string;
   onSignOut: () => void;
 }
 
-type TabType = "dashboard" | "assets" | "flights" | "inspections" | "reports" | "team";
+type TabType = "dashboard" | "assets" | "discussion" | "inspections" | "reports" | "team";
 
-export default function DashboardShell({ onSignOut }: DashboardShellProps) {
+export default function DashboardShell({ userEmail, onSignOut }: DashboardShellProps) {
   const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [inspectedAsset, setInspectedAsset] = useState<Asset | null>(null);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -45,7 +46,7 @@ export default function DashboardShell({ onSignOut }: DashboardShellProps) {
   const navigationItems = [
     { id: "dashboard" as TabType, label: "Dashboard", icon: LayoutDashboard },
     { id: "assets" as TabType, label: "Assets", icon: Folder },
-    { id: "flights" as TabType, label: "Flights", icon: Plane },
+    { id: "discussion" as TabType, label: "AI Discussion", icon: MessagesSquare },
     { id: "inspections" as TabType, label: "Inspections", icon: ClipboardCheck },
     { id: "reports" as TabType, label: "Reports", icon: FileText },
     { id: "team" as TabType, label: "Team", icon: Users }
@@ -55,20 +56,10 @@ export default function DashboardShell({ onSignOut }: DashboardShellProps) {
     switch (activeTab) {
       case "dashboard":
         return (
-          <DashboardHome
-            onViewAllProjects={() => setActiveTab("flights")}
-            onViewAllFlights={() => setActiveTab("flights")}
-          />
+          <DashboardHome onViewAllProjects={() => setActiveTab("assets")} />
         );
-      case "flights":
-        return (
-          <FlightsView
-            onNavigateToInspection={(asset: any) => {
-              setInspectedAsset(asset);
-              setActiveTab("inspections");
-            }}
-          />
-        );
+      case "discussion":
+        return <AIDiscussionView />;
       case "assets":
         return (
           <AssetsView
@@ -116,7 +107,7 @@ export default function DashboardShell({ onSignOut }: DashboardShellProps) {
 
       {/* Left Navigation Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-950 border-r border-white/10 flex flex-col justify-between p-6 transform transition-transform duration-300 md:relative md:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-neutral-950 border-r border-white/10 flex flex-col justify-between p-6 transform transition-transform duration-300 md:sticky md:top-0 md:h-screen md:translate-x-0 ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
@@ -168,12 +159,14 @@ export default function DashboardShell({ onSignOut }: DashboardShellProps) {
         {/* Footer Area with Sign Out */}
         <div className="pt-6 border-t border-white/10 space-y-4">
           <div className="flex items-center space-x-3 px-3">
-            <div className="w-8 h-8 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center font-bold text-xs">
-              AD
+            <div className="w-8 h-8 rounded-full bg-neutral-800 border border-white/10 flex items-center justify-center font-bold text-xs flex-shrink-0">
+              {(userEmail || "A").charAt(0).toUpperCase()}
             </div>
             <div className="text-left overflow-hidden">
-              <div className="text-xs font-bold text-white truncate">Administrator</div>
-              <div className="text-[10px] text-gray-500 truncate">admin@gmail.com</div>
+              <div className="text-xs font-bold text-white truncate">
+                {userEmail ? userEmail.split("@")[0] : "Administrator"}
+              </div>
+              <div className="text-[10px] text-gray-500 truncate">{userEmail || "admin@gmail.com"}</div>
             </div>
           </div>
           <button

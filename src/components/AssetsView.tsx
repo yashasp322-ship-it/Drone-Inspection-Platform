@@ -9,9 +9,31 @@ interface Asset {
   thumbnail: string;
   inspectionPageId: string;
   gDriveLink?: string;
+  mapLink?: string;
+  lat?: number | null;
+  lng?: number | null;
   status: string;
+  assignedTo?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+interface TeamMember {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+}
+
+// Extracts lat/lng from common Google Maps URL formats (e.g. /@19.07,72.87,15z or ?q=19.07,72.87)
+function parseLatLngFromMapLink(url: string): { lat: number; lng: number } | null {
+  if (!url) return null;
+  const atMatch = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (atMatch) return { lat: parseFloat(atMatch[1]), lng: parseFloat(atMatch[2]) };
+  const qMatch = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (qMatch) return { lat: parseFloat(qMatch[1]), lng: parseFloat(qMatch[2]) };
+  return null;
 }
 
 interface AssetsViewProps {
@@ -20,9 +42,10 @@ interface AssetsViewProps {
 
 export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [team, setTeam] = useState<TeamMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  
+
   // Form State
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset> | null>(null);
   const [name, setName] = useState("");
@@ -30,6 +53,18 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
   const [location, setLocation] = useState("");
   const [status, setStatus] = useState("Passed");
   const [gDriveLink, setGDriveLink] = useState("");
+  const [mapLink, setMapLink] = useState("");
+  const [assignedTo, setAssignedTo] = useState("");
+
+  const fetchTeam = async () => {
+    try {
+      const res = await fetch("http://localhost:5001/team");
+      const data = await res.json();
+      setTeam(data);
+    } catch (err) {
+      console.error("Error fetching team:", err);
+    }
+  };
 
   const fetchAssets = async () => {
     try {
@@ -46,6 +81,7 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
 
   useEffect(() => {
     fetchAssets();
+    fetchTeam();
   }, []);
 
   const handleOpenAddModal = () => {
@@ -55,6 +91,8 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
     setLocation("");
     setStatus("Passed");
     setGDriveLink("");
+    setMapLink("");
+    setAssignedTo("");
     setIsModalOpen(true);
   };
 
@@ -65,6 +103,8 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
     setLocation(asset.location);
     setStatus(asset.status);
     setGDriveLink(asset.gDriveLink || "");
+    setMapLink(asset.mapLink || "");
+    setAssignedTo(asset.assignedTo || "");
     setIsModalOpen(true);
   };
 
@@ -82,12 +122,17 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const coords = parseLatLngFromMapLink(mapLink);
     const payload = {
       name,
       infrastructureType,
       location,
       status,
       gDriveLink,
+      mapLink,
+      lat: coords?.lat ?? null,
+      lng: coords?.lng ?? null,
+      assignedTo: assignedTo || null,
       inspectionPageId: currentAsset?.inspectionPageId || `inspect-${Date.now()}`
     };
 
@@ -173,7 +218,12 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-white">{item.name}</h4>
-                    <p className="text-[10px] text-gray-500 mt-0.5">{item.infrastructureType} • {item.location}</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">
+                      {item.infrastructureType} • {item.location}
+                      {item.assignedTo && (
+                        <> • Assigned to {team.find((m) => m.id === item.assignedTo)?.name || "Unknown"}</>
+                      )}
+                    </p>
                   </div>
                 </div>
 
@@ -295,6 +345,32 @@ export default function AssetsView({ onInspectAsset }: AssetsViewProps) {
                   placeholder="https://drive.google.com/drive/folders/..."
                   className="w-full px-4 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white transition-colors"
                 />
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] uppercase font-bold tracking-widest text-gray-400">Google Maps Link</label>
+                <input
+                  type="url"
+                  value={mapLink}
+                  onChange={(e) => setMapLink(e.target.value)}
+                  placeholder="https://maps.google.com/?q=19.076,72.877"
+                  className="w-full px-4 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white transition-colors"
+                />
+                <p className="text-[10px] text-gray-500">Used to pin this asset on the Map Overview.</p>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-[10px] uppercase font-bold tracking-widest text-gray-400">Assigned To</label>
+                <select
+                  value={assignedTo}
+                  onChange={(e) => setAssignedTo(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-neutral-900 border border-white/10 rounded-xl text-xs text-white focus:outline-none focus:border-white transition-colors"
+                >
+                  <option value="">Unassigned</option>
+                  {team.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name} — {m.role}</option>
+                  ))}
+                </select>
               </div>
 
               <div className="space-y-1">

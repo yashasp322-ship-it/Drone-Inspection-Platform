@@ -1,9 +1,12 @@
 import os
 import json
+import base64
+import mimetypes
 import concurrent.futures
 from typing import Dict, Any, List, TypedDict, Literal, Optional
 from datetime import datetime, timedelta
 
+import requests
 from dotenv import load_dotenv
 from groq import Groq
 from langgraph.graph import StateGraph, END
@@ -12,9 +15,30 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), "..", ".env"))
 load_dotenv()
 
 # ─── Groq SDK helper ─────────────────────────────────────────────────────────
-# Using llama-3.3-70b-versatile — Groq's best free model, no daily quota.
+# Text-only reasoning uses llama-3.3-70b-versatile.
+# Image-grounded agents (image analysis, defect detection) use a vision-capable
+# Groq model so they actually look at the drone imagery instead of guessing
+# from the asset name/metadata alone.
 
 GROQ_MODEL = "llama-3.3-70b-versatile"
+GROQ_VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
+
+# Google Drive share links never include a literal file extension, so we also
+# match on Drive's own URL shape (file/d/, /d/<id>, uc?export=download, etc.)
+# in addition to obvious extensions/keywords.
+VIDEO_MARKERS = [
+    "video", ".mp4", ".mov", ".avi", ".mkv", ".webm", "presentation",
+    "file/d/", "/d/", "uc?export=download", "uc?id=",
+]
+
+
+def is_video_resource(gdrive_link: str, images: List[str]) -> bool:
+    link = (gdrive_link or "").lower()
+    imgs = [str(i).lower() for i in images]
+    if link and any(m in link for m in VIDEO_MARKERS):
+        return True
+    return any(any(m in img for m in VIDEO_MARKERS) for img in imgs)
+
 
 def call_ai(prompt: str, timeout: float = 30.0) -> str:
     """
@@ -40,6 +64,60 @@ def call_ai(prompt: str, timeout: float = 30.0) -> str:
             return response.choices[0].message.content
         except concurrent.futures.TimeoutError:
             raise TimeoutError(f"Groq call timed out after {timeout}s")
+
+
+def _to_data_uri(url: str, timeout: float = 10.0) -> Optional[str]:
+    """
+    Downloads an image and returns it as a base64 data: URI. Groq's API runs
+    remotely and cannot fetch http://localhost URLs (where manually uploaded
+    drone images are served from), so we must embed the bytes directly rather
+    than passing the URL through. Returns None if the image can't be fetched.
+    """
+    try:
+        resp = requests.get(url, timeout=timeout)
+        resp.raise_for_status()
+        content_type = resp.headers.get("Content-Type", "").split(";")[0].strip()
+        if not content_type or not content_type.startswith("image/"):
+            content_type = mimetypes.guess_type(url)[0] or "image/jpeg"
+        encoded = base64.b64encode(resp.content).decode("utf-8")
+        return f"data:{content_type};base64,{encoded}"
+    except Exception:
+        return None
+
+
+def call_ai_vision(prompt: str, image_urls: List[str], timeout: float = 30.0, max_images: int = 4) -> str:
+    """
+    Calls Groq's vision-capable model with the prompt plus actual drone image(s)
+    attached, so the model reasons over real pixel content instead of just
+    asset metadata. Raises if no usable image could be fetched and embedded.
+    """
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        raise ValueError("GROQ_API_KEY environment variable is not set.")
+
+    candidates = [u for u in image_urls if isinstance(u, str) and u.lower().startswith("http")][:max_images]
+    data_uris = [uri for uri in (_to_data_uri(u) for u in candidates) if uri]
+    if not data_uris:
+        raise ValueError("No image could be downloaded/embedded for visual analysis.")
+
+    client = Groq(api_key=api_key)
+    content = [{"type": "text", "text": prompt}]
+    for uri in data_uris:
+        content.append({"type": "image_url", "image_url": {"url": uri}})
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+        future = ex.submit(
+            client.chat.completions.create,
+            model=GROQ_VISION_MODEL,
+            messages=[{"role": "user", "content": content}],
+            temperature=0.3,
+            max_tokens=2048,
+        )
+        try:
+            response = future.result(timeout=timeout)
+            return response.choices[0].message.content
+        except concurrent.futures.TimeoutError:
+            raise TimeoutError(f"Groq vision call timed out after {timeout}s")
 
 
 def parse_json(text: str) -> Dict[str, Any]:
@@ -144,23 +222,18 @@ def image_analysis_node(state: AgentState) -> Dict[str, Any]:
         "output": {}
     }
 
-    gdrive = str(state.get("gdrive_link", "")).lower()
-    images = [str(img).lower() for img in state.get("images", [])]
-    video_exts = ["video", ".mp4", ".mov", ".avi", ".mkv", "presentation", "webm"]
-    
-    has_video = any(ext in gdrive for ext in video_exts) or any(ext in img for img in images for ext in video_exts)
-    
-    if has_video:
-        raise ValueError("Pipeline aborted: Target resource is a compressed video stream file. Automated defect mapping requires raw high-resolution orthomosaic drone images.")
+    images_raw = state.get("images", [])
+    if is_video_resource(state.get("gdrive_link", ""), images_raw):
+        raise ValueError("Pipeline aborted: Target resource is a compressed video stream file (or Drive video link). Automated defect mapping requires raw high-resolution orthomosaic drone images.")
 
     prompt = f"""You are the Image Analysis Agent for drone infrastructure inspection.
 Asset: "{state['asset_name']}"
 
-Analyze the inspection image set and determine:
+Look at the attached drone image(s) directly and determine, based on what you actually see:
 1. Suitability for structural defect scanning (High/Medium/Low).
-2. Estimated sensor type (e.g. "RGB CMOS 20MP", "Thermal IR").
-3. Image quality metrics: lighting, motion blur, GSD.
-4. Brief reasoning.
+2. Estimated sensor type (e.g. "RGB CMOS 20MP", "Thermal IR") based on visual characteristics.
+3. Image quality metrics: lighting, motion blur, sharpness, framing.
+4. Brief reasoning that references specific visual details in the image(s).
 5. Confidence score (0–100).
 
 Reply ONLY with a JSON object using these exact keys:
@@ -173,14 +246,14 @@ Reply ONLY with a JSON object using these exact keys:
 }}"""
 
     try:
-        text = call_ai(prompt, timeout=15.0)
+        text = call_ai_vision(prompt, images_raw, timeout=20.0)
         data = parse_json(text)
     except Exception as e:
         data = {
             "suitability": "High",
             "sensor_type": "RGB CMOS 20MP",
             "image_quality_metrics": "Good lighting, minimal motion blur, 2.1cm GSD",
-            "reasoning": f"Heuristic analysis: standard drone imagery confirmed suitable for structural scanning. (AI unavailable: {type(e).__name__})",
+            "reasoning": f"Heuristic analysis (no vision model result available: {type(e).__name__}). Standard drone imagery assumed suitable for structural scanning.",
             "confidence_score": 87
         }
 
@@ -208,15 +281,20 @@ def defect_detection_node(state: AgentState) -> Dict[str, Any]:
     }
 
     img = state.get("image_analysis", {})
+    images_raw = state.get("images", [])
     prompt = f"""You are the Defect Detection Agent for drone infrastructure inspection.
 Asset: "{state['asset_name']}"
 Prior image analysis: suitability={img.get('suitability')}, sensor={img.get('sensor_type')}
 
-Identify all structural defects visible in the inspection imagery, such as:
+Look closely at the attached drone image(s) and identify only the structural defects you can
+actually observe in them, such as:
 - Concrete cracks, spalling, delamination
 - Corrosion / rust on steel elements
 - Misalignment or settlement
 - Thermal anomalies (hot spots, moisture intrusion)
+
+If you see no visible defects, return an empty "defects_found" list and total_count 0 — do not
+invent defects that aren't visible in the image(s).
 
 Reply ONLY with a JSON object:
 {{
@@ -229,7 +307,7 @@ Reply ONLY with a JSON object:
 }}"""
 
     try:
-        text = call_ai(prompt, timeout=15.0)
+        text = call_ai_vision(prompt, images_raw, timeout=20.0)
         data = parse_json(text)
     except Exception as e:
         name = state["asset_name"].lower()
