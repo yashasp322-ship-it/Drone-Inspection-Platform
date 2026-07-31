@@ -247,6 +247,16 @@ export default function InspectionsView({ inspectedAsset, onClearAsset }: Inspec
             } else if (update.event === "error") {
               setLogs(prev => [...prev, `✕ Error: ${update.message}`]);
               setIsRunning(false);
+              setPipelineState(prev => {
+                const next = { ...prev };
+                if (activeAgent && next[activeAgent as keyof InspectionRunState]) {
+                  next[activeAgent as keyof InspectionRunState].status = "Failed";
+                } else if (!activeAgent) {
+                  // Fallback: if no active agent yet, fail the first one
+                  next.image_analysis.status = "Failed";
+                }
+                return next;
+              });
             }
           } catch (e) { /* skip bad JSON */ }
         }
