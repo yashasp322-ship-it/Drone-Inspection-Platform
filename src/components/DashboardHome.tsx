@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+ import { useEffect, useMemo, useState } from "react";
 import { Folder, ClipboardCheck, AlertTriangle, MapPin } from "lucide-react";
 import MapOverviewModal from "./MapOverviewModal";
 
@@ -7,7 +7,7 @@ interface DashboardHomeProps {
 }
 
 interface Asset {
-  id: string;
+  id: string;0
   name: string;
   infrastructureType: string;
   location: string;
