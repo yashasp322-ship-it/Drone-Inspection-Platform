@@ -1,5 +1,4 @@
 import { motion } from "framer-motion";
-import CountUp from "react-countup";
 import { Play, Award } from "lucide-react";
 
 export default function Hero() {
@@ -42,7 +41,7 @@ export default function Hero() {
             className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15 text-white text-xs font-semibold uppercase tracking-wider"
           >
             <Award className="w-3.5 h-3.5" />
-            <span>Next-Gen Reality Capture Platform</span>
+            <span>AI-Powered Infrastructure Inspection Platform</span>
           </motion.div>
 
           <motion.h1
@@ -58,7 +57,7 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.1 }}
             className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight tracking-tight"
           >
-            Tighten the Gap Between <br className="hidden md:inline" />
+            Turn Drone Footage Into <br className="hidden md:inline" />
             <span className="text-transparent
 bg-clip-text
 bg-[length:200%_200%]
@@ -67,7 +66,7 @@ from-white
 via-sky-300
 to-gray-300
 animate-gradient">
-              Capture & Confidence
+              Defect Reports
             </span>
           </motion.h1>
 
@@ -77,7 +76,7 @@ animate-gradient">
             transition={{ duration: 0.6, delay: 0.2 }}
             className="text-gray-300 text-lg sm:text-xl leading-relaxed max-w-xl"
           >
-            DroneDeploy brings together aerial mapping, ground 360° walkthroughs, and custom CAD comparison into one unified cloud workspace. Document, measure, and share.
+            Upload drone imagery of bridges, wind turbines, solar farms, and roads. A multi-agent AI pipeline analyzes the footage, detects structural defects, assesses severity, and generates a Markdown inspection report — live, in one workspace.
           </motion.p>
 
           <motion.div
@@ -112,15 +111,15 @@ animate-gradient">
           >
             <div>
               <div className="text-2xl sm:text-3xl font-extrabold text-white">
-                400m+
+                5
               </div>
-              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider">Acres Mapped</div>
+              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider">AI Agents Per Inspection</div>
             </div>
             <div>
               <div className="text-2xl sm:text-3xl font-extrabold text-white">
-               190+
+                4
               </div>
-              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider">Countries Covered</div>
+              <div className="text-xs text-gray-400 mt-1 uppercase tracking-wider">Asset Types Supported</div>
             </div>
             <div>
               <div className="text-2xl sm:text-3xl font-extrabold text-white">
@@ -170,7 +169,7 @@ animate-gradient">
 
               <div className="relative z-10 flex justify-between items-start">
                 <span className="px-3 py-1 rounded bg-black/60 border border-white/10 text-white font-mono text-xs">
-                  DRONE_WAYPOINT_FLIGHT_A2
+                  INSPECTION_PIPELINE_RUN
                 </span>
                 <motion.span
                   animate={{
@@ -184,7 +183,7 @@ animate-gradient">
                   }}
                   className="px-2.5 py-0.5 rounded bg-white/10 border border-white/20 text-white text-xs font-semibold"
                 >
-                  LIVE TELEMETRY
+                  LIVE AGENT STATUS
                 </motion.span>
               </div>
 
@@ -201,10 +200,10 @@ animate-gradient">
                   className="bg-brand-dark/95 border border-white/10 rounded-lg p-3 backdrop-blur-md"
                 >
                   <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">
-                    Battery Status
+                    Defects Found
                   </div>
                   <div className="text-sm font-bold text-white mt-1">
-                    87% • 22 min left
+                    3 flagged • 1 severe
                   </div>
                 </motion.div>
 
@@ -219,10 +218,10 @@ animate-gradient">
                   className="bg-brand-dark/95 border border-white/10 rounded-lg p-3 backdrop-blur-md"
                 >
                   <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold">
-                    Captured Pixels
+                    Confidence Score
                   </div>
                   <div className="text-sm font-bold text-white mt-1">
-                    1.2B Pixels
+                    92% avg.
                   </div>
                 </motion.div>
 

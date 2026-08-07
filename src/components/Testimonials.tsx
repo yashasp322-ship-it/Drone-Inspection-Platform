@@ -6,23 +6,23 @@ export default function Testimonials() {
 
   const testimonials = [
     {
-      quote: "DroneDeploy has completely transformed how we handle site inspections. We mapped a 400-acre solar site in two days and discovered three critical cell malfunctions before commissioning.",
+      quote: "This platform has completely transformed how we handle solar site inspections. We ran a 400-panel array through the pipeline in an afternoon and caught three critical hot spots before they became failures.",
       author: "Sarah Jenkins",
       role: "VP of Quality, Renewables Corp",
       logo: "SolarGrid",
-      metric: "99.8% Commissioning Accuracy",
+      metric: "99.8% Detection Confidence",
     },
     {
-      quote: "Before this platform, our earthworks volume reports took weeks of manual surveying and data processing. Now, we capture stockpile sizes in 20 minutes, with instant cloud volume reports.",
+      quote: "Before this, our bridge inspection reports took weeks of manual review and write-ups. Now the pipeline flags every crack and generates the Markdown report before the drone even lands.",
       author: "Marcus Vance",
       role: "Senior Project Manager, BuildCore Infrastructure",
       logo: "BuildCore",
       metric: "14x Faster Report Turnaround",
     },
     {
-      quote: "Comparing as-built drone maps directly to our IFC CAD models revealed a pile cap misalignment that would have cost us over $120,000 to remediate had it been poured.",
+      quote: "The severity assessment agent caught a hairline crack on a turbine blade root that our field team had missed on two prior walkdowns. That one catch avoided a full blade replacement.",
       author: "Elena Rostova",
-      role: "BIM Director, MetroBuild Europe",
+      role: "Reliability Director, MetroBuild Energy",
       logo: "MetroBuild",
       metric: "$120k+ Cost Avoided",
     },

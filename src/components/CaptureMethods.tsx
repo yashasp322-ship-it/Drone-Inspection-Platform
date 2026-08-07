@@ -1,45 +1,57 @@
 import { useState } from "react";
-import { Plane, ArrowRight, Zap, Target, Smartphone } from "lucide-react";
+import { Landmark, ArrowRight, Zap, Sun, Route } from "lucide-react";
 
-type MethodType = "aerial" | "ground" | "robot";
+type MethodType = "bridges" | "turbines" | "solar" | "roads";
 
 export default function CaptureMethods() {
-  const [activeMethod, setActiveMethod] = useState<MethodType>("aerial");
+  const [activeMethod, setActiveMethod] = useState<MethodType>("bridges");
 
   const methods = {
-    aerial: {
-      title: "Aerial Drone Inspections",
-      tagline: "Autonomous surveying with precise RTK accuracy.",
-      desc: "Deploy commercial drones to create high-resolution orthomosaics, 3D point clouds, and elevation contours. Perfect for bulk earthworks, roof inspections, and multi-acre crop assessments.",
-      icon: Plane,
+    bridges: {
+      title: "Bridge Inspections",
+      tagline: "Spot structural defects before they become closures.",
+      desc: "Fly drone passes over piers, girders, and deck undersides. The AI pipeline flags concrete cracks, spalling, corrosion, and misalignment, then scores each finding by severity.",
+      icon: Landmark,
       features: [
-        "Autonomous pathing with offline maps support",
-        "Sub-centimeter accuracy using RTK/PPK workflows",
-        "Thermal inspection and solar array analytics",
+        "Concrete crack, spalling, and delamination detection",
+        "Corrosion and rust flagging on steel elements",
+        "Severity-ranked findings with recommended actions",
       ],
       img: "https://images.unsplash.com/photo-1527977966376-1c8408f9f108?auto=format&fit=crop&w=800&q=80",
     },
-    ground: {
-      title: "Ground Walkthroughs",
-      tagline: "Capture interior and exterior site progress on foot.",
-      desc: "Walk your site with a 360-degree camera or a smartphone to capture high-density panoramic paths. Automatically sync with floorplans to align indoor conditions with project timelines.",
-      icon: Smartphone,
+    turbines: {
+      title: "Wind Turbine Inspections",
+      tagline: "Catch blade and nacelle damage from the ground up.",
+      desc: "Upload blade and nacelle imagery from routine flights. The pipeline identifies leading-edge erosion, cracks, and lightning strike damage without grounding the turbine.",
+      icon: Zap,
       features: [
-        "Standard iOS/Android app support",
-        "Automated localization onto CAD/BIM floor plans",
-        "Side-by-side split comparison of weekly progress",
+        "Blade erosion and micro-crack detection",
+        "Lightning strike and coating damage flags",
+        "Confidence-scored defect reports per blade",
       ],
       img: "https://images.unsplash.com/photo-1504307651254-35680f356dfd?auto=format&fit=crop&w=800&q=80",
     },
-    robot: {
-      title: "Autonomous Robotics",
-      tagline: "Unattended, scheduled reality capture systems.",
-      desc: "Integrate with automated ground rovers (like Boston Dynamics Spot) or drone docks to schedule regular, unmanned inspections. Perfect for hazardous sites, mining pits, or secure infrastructure.",
-      icon: Target,
+    solar: {
+      title: "Solar Farm Inspections",
+      tagline: "Find failing panels before they cost you output.",
+      desc: "Thermal and RGB drone passes across panel arrays feed the same pipeline, surfacing hot spots, cracked cells, and wiring faults across thousands of panels in minutes.",
+      icon: Sun,
       features: [
-        "Scheduled, hands-free inspection routines",
-        "Hazardous area scanning without human risk",
-        "Cloud sync from docked charge stations",
+        "Hot-spot and cracked-cell detection",
+        "Panel-level severity assessment",
+        "Fast triage across large arrays",
+      ],
+      img: "https://images.unsplash.com/photo-1509391366360-2e959784a276?auto=format&fit=crop&w=800&q=80",
+    },
+    roads: {
+      title: "Road Inspections",
+      tagline: "Track pavement condition at network scale.",
+      desc: "Aerial sweeps of road segments are run through the same defect-detection and severity agents used for structures, surfacing potholes, cracking, and erosion for maintenance planning.",
+      icon: Route,
+      features: [
+        "Pothole and surface crack detection",
+        "Erosion and shoulder damage flagging",
+        "Prioritized maintenance recommendations",
       ],
       img: "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?auto=format&fit=crop&w=800&q=80",
     },
@@ -57,10 +69,10 @@ export default function CaptureMethods() {
           <div className="lg:col-span-6 space-y-8 text-left">
             <div className="space-y-4">
               <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
-                One Platform. Any View.
+                One Pipeline. Every Asset Type.
               </h2>
               <p className="text-gray-300 text-lg leading-relaxed">
-                Connect your aerial mappings, indoor ground walks, and automated robotic telemetry inside a unified repository.
+                The same five-agent AI pipeline adapts its detection logic across bridges, wind turbines, solar farms, and roads.
               </p>
             </div>
 
@@ -107,7 +119,7 @@ export default function CaptureMethods() {
                   href="#"
                   className="inline-flex items-center space-x-2 text-white font-bold hover:text-gray-300 group text-sm"
                 >
-                  <span>Learn more about {activeMethod} workflows</span>
+                  <span>Learn more about {activeMethod} inspections</span>
                   <ArrowRight className="w-4 h-4 transform group-hover:translate-x-1 transition-transform" />
                 </a>
               </div>
@@ -131,8 +143,8 @@ export default function CaptureMethods() {
                   <IconComponent className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">COMPATIBLE HARDWARE</div>
-                  <div className="text-xs font-semibold text-white">DJI, Skydio, Spot, Insta360</div>
+                  <div className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">PIPELINE STAGE</div>
+                  <div className="text-xs font-semibold text-white">Image Analysis → Defect Detection → Severity → Report</div>
                 </div>
               </div>
             </div>

@@ -1,4 +1,4 @@
- import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Folder, ClipboardCheck, AlertTriangle, MapPin } from "lucide-react";
 import MapOverviewModal from "./MapOverviewModal";
 
@@ -7,7 +7,7 @@ interface DashboardHomeProps {
 }
 
 interface Asset {
-  id: string;0
+  id: string;
   name: string;
   infrastructureType: string;
   location: string;
@@ -208,9 +208,8 @@ export default function DashboardHome({ onViewAllProjects }: DashboardHomeProps)
                       <p className="text-[10px] text-gray-500 mt-0.5">{a.infrastructureType} • {a.location}</p>
                     </div>
                   </div>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                    a.status === "Passed" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
-                  }`}>
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${a.status === "Passed" ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+                    }`}>
                     {a.status}
                   </span>
                 </div>

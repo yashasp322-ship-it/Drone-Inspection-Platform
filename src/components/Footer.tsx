@@ -10,14 +10,14 @@ export default function Footer() {
               D
             </div>
             <span>
-              DRONE<span className="text-gray-400">DEPLOY</span>
+              DRONE<span className="text-gray-400">INSPECTOR</span>
             </span>
           </a>
           <p className="text-gray-400 text-xs leading-relaxed max-w-sm">
-            DroneDeploy is the leading cloud software platform for commercial drones and reality capture, making aerial and ground site data accessible and productive for everyone.
+            Drone Infrastructure Inspector runs drone imagery through a multi-agent AI pipeline to detect infrastructure defects and generate inspection reports — fast, consistent, and severity-ranked.
           </p>
           <div className="text-[10px] text-gray-500">
-            © 2026 DroneDeploy Inc. All rights reserved. All original visual designs and assets simulated for demonstration purposes.
+            © 2026 Drone Infrastructure Inspector. All rights reserved.
           </div>
         </div>
 
@@ -25,21 +25,21 @@ export default function Footer() {
         <div className="space-y-4">
           <h5 className="text-xs font-bold text-white uppercase tracking-wider">Platform</h5>
           <ul className="space-y-2 text-xs text-gray-400">
-            <li><a href="#" className="hover:text-white transition-colors">Drone Mapping</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">360 Ground Walk</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">AI Analysis</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">BIM Compare</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Asset Management</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Live Agent Pipeline</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Defect Detection</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Inspection Reports</a></li>
           </ul>
         </div>
 
         {/* Links Column 2 */}
         <div className="space-y-4">
-          <h5 className="text-xs font-bold text-white uppercase tracking-wider">Industries</h5>
+          <h5 className="text-xs font-bold text-white uppercase tracking-wider">Asset Types</h5>
           <ul className="space-y-2 text-xs text-gray-400">
-            <li><a href="#" className="hover:text-white transition-colors">Construction</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Energy</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Agriculture</a></li>
-            <li><a href="#" className="hover:text-white transition-colors">Mining</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Bridges</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Wind Turbines</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Solar Farms</a></li>
+            <li><a href="#" className="hover:text-white transition-colors">Roads</a></li>
           </ul>
         </div>
 

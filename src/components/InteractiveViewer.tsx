@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Layers, MapPin, Eye, Info } from "lucide-react";
 
-type LayerType = "ortho" | "elevation" | "thermal" | "bim";
+type LayerType = "ortho" | "defects" | "thermal" | "severity";
 
 interface InteractiveViewerProps {
   inspectedAsset?: {
@@ -17,34 +17,34 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
   const [activeAnnotation, setActiveAnnotation] = useState<number | null>(null);
 
   const annotations = [
-    { id: 1, label: "Stockpile A", x: "32%", y: "42%", volume: "1,420 yd³", height: "18.4 ft", type: "volume" },
-    { id: 2, label: "Retaining Wall", x: "65%", y: "55%", length: "245 ft", height: "12.0 ft", type: "length" },
-    { id: 3, label: "Utility Vault", x: "48%", y: "78%", status: "Inspected", type: "status" },
+    { id: 1, label: "North Pillar Crack", x: "32%", y: "42%", size: "1.8mm width, 28cm length", severity: "Moderate", type: "defect" },
+    { id: 2, label: "Corroded Bracket", x: "65%", y: "55%", size: "Surface rust, 15cm span", severity: "High", type: "defect" },
+    { id: 3, label: "Panel Cluster B", x: "48%", y: "78%", status: "No Defects Found", type: "status" },
   ];
 
   // Colors/styles based on active layer
   const layerConfigs = {
     ortho: {
-      title: "Orthomosaic (Orthophoto)",
-      desc: "High-resolution overhead mapping. Zoom in to identify surface cracks, cracks in walls, or site equipment.",
+      title: "Raw Drone Imagery",
+      desc: "The unprocessed frame as captured, exactly as it's handed to the AI pipeline's image analysis agent.",
       overlayStyle: "opacity-0",
       blendMode: "mix-blend-normal",
     },
-    elevation: {
-      title: "Elevation Heatmap",
-      desc: "Digital elevation model (DEM) representing height variations across the landscape, critical for runoff analysis.",
+    defects: {
+      title: "Defect Detection Overlay",
+      desc: "Output of the Defect Detection Agent — cracks, corrosion, and structural anomalies flagged with bounding markers.",
       overlayStyle: "opacity-90 bg-gradient-to-tr from-black via-neutral-500 to-white mix-blend-overlay",
       blendMode: "mix-blend-overlay",
     },
     thermal: {
       title: "Thermal Mapping",
-      desc: "Infrared heat signature mapping. Detect water pooling on commercial roofs, pipe leaks, or solar panel failures.",
+      desc: "Infrared heat signature mapping. Useful for spotting hot spots on solar panels or turbine gearboxes.",
       overlayStyle: "opacity-80 bg-gradient-to-r from-black via-neutral-600 to-white mix-blend-luminosity",
       blendMode: "mix-blend-luminosity",
     },
-    bim: {
-      title: "BIM/CAD Alignment",
-      desc: "Superimpose structural plans directly onto the actual drone-scanned orthomosaic to inspect layout drift.",
+    severity: {
+      title: "Severity Assessment",
+      desc: "Output of the Severity Assessment Agent — each detected defect scored and ranked by risk before recommendations are generated.",
       overlayStyle: "opacity-60 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] mix-blend-screen",
       blendMode: "mix-blend-screen",
     },
@@ -56,10 +56,10 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
         {/* Header Content */}
         <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
           <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
-            Experience the DroneDeploy Workspace
+            Watch the AI Pipeline Work
           </h2>
           <p className="text-gray-300 text-lg">
-            Interact with actual drone data. Toggle layers, inspect thermal patterns, or measure stockpile volume dynamically below.
+            Step through what each agent sees — raw imagery, detected defects, thermal signatures, and the severity scores behind every recommendation.
           </p>
         </div>
 
@@ -86,7 +86,7 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
                         : "bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
                     }`}
                   >
-                    <span className="capitalize">{layer === "bim" ? "BIM Overlay" : layer}</span>
+                    <span className="capitalize">{layer === "defects" ? "Defect Detection" : layer === "severity" ? "Severity Assessment" : layer}</span>
                     <span
                       className={`w-2.5 h-2.5 rounded-full ${
                         activeLayer === layer ? "bg-brand-cyan animate-pulse" : "bg-gray-600"
@@ -121,14 +121,14 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
                 <MapPin className="w-5 h-5 text-brand-cyan" />
                 <div>
                   <h4 className="text-sm font-bold text-white">
-                    {inspectedAsset ? inspectedAsset.name : "East Valley Grid Expansion"}
+                    {inspectedAsset ? inspectedAsset.name : "Cedar Creek Bridge — Span 4"}
                   </h4>
                   <p className="text-[10px] text-gray-500">
                     {inspectedAsset
                       ? `Location: ${inspectedAsset.location} ${
                           inspectedAsset.gDriveLink ? `• Drive: ${inspectedAsset.gDriveLink}` : ""
                         }`
-                      : "Captured July 28, 2026 • Accuracy: RTK Sub-cm"}
+                      : "Inspected Aug 5, 2026 • 5-agent pipeline"}
                   </p>
                 </div>
               </div>
@@ -161,8 +161,8 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
               {/* Dynamic Layer Filters */}
               <div className={`absolute inset-0 transition-all duration-500 pointer-events-none ${layerConfigs[activeLayer].overlayStyle}`} />
               
-              {/* Optional Cad Overlay Grid lines */}
-              {activeLayer === "bim" && (
+              {/* Severity scan grid lines */}
+              {activeLayer === "severity" && (
                 <div className="absolute inset-0 border border-brand-cyan/20 grid grid-cols-6 grid-rows-6 pointer-events-none animate-pulse">
                   {[...Array(36)].map((_, i) => (
                     <div key={i} className="border-t border-l border-brand-cyan/15 font-mono text-[8px] text-brand-cyan/40 p-1">
@@ -204,33 +204,27 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
                   <div key={ann.id} className="flex justify-between items-center">
                     <div>
                       <span className="text-[10px] uppercase font-bold tracking-widest text-brand-cyan">
-                        Active Measurement
+                        Detected Defect
                       </span>
                       <h5 className="text-white text-base font-extrabold mt-1">{ann.label}</h5>
                     </div>
 
                     <div className="flex items-center space-x-6">
-                      {ann.volume && (
+                      {ann.size && (
                         <div>
-                          <div className="text-[10px] text-gray-400">VOLUMETRIC CUT/FILL</div>
-                          <div className="text-white font-mono font-bold text-lg">{ann.volume}</div>
+                          <div className="text-[10px] text-gray-400">ESTIMATED SIZE</div>
+                          <div className="text-white font-mono font-bold text-lg">{ann.size}</div>
                         </div>
                       )}
-                      {ann.height && (
+                      {ann.severity && (
                         <div>
-                          <div className="text-[10px] text-gray-400">MAX HEIGHT</div>
-                          <div className="text-white font-mono font-bold text-lg">{ann.height}</div>
-                        </div>
-                      )}
-                      {ann.length && (
-                        <div>
-                          <div className="text-[10px] text-gray-400">TOTAL LENGTH</div>
-                          <div className="text-white font-mono font-bold text-lg">{ann.length}</div>
+                          <div className="text-[10px] text-gray-400">SEVERITY</div>
+                          <div className="text-white font-mono font-bold text-lg">{ann.severity}</div>
                         </div>
                       )}
                       {ann.status && (
                         <div>
-                          <div className="text-[10px] text-gray-400">QA VERIFICATION</div>
+                          <div className="text-[10px] text-gray-400">STATUS</div>
                           <div className="text-emerald-400 font-bold text-lg">{ann.status}</div>
                         </div>
                       )}

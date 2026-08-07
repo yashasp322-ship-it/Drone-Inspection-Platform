@@ -1,5 +1,5 @@
 import React, { useState, useRef } from "react";
-import { MoveHorizontal, Layout } from "lucide-react";
+import { MoveHorizontal, ScanSearch } from "lucide-react";
 
 export default function BimSlider() {
   const [sliderPosition, setSliderPosition] = useState(50);
@@ -31,26 +31,26 @@ export default function BimSlider() {
           {/* Left Text */}
           <div className="lg:col-span-5 text-left space-y-6">
             <div className="inline-flex items-center space-x-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/15 text-white text-xs font-semibold uppercase tracking-wider">
-              <Layout className="w-3.5 h-3.5" />
-              <span>BIM vs. As-Built Comparison</span>
+              <ScanSearch className="w-3.5 h-3.5" />
+              <span>Raw Footage vs. AI Detection</span>
             </div>
-            
+
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
-              Identify Drift Instantly
+              See What the AI Sees
             </h2>
-            
+
             <p className="text-gray-300 text-base leading-relaxed">
-              Slide the comparison bar to align 3D structural blueprints (BIM) with real as-built drone photogrammetry. Detect structural misalignments, concrete pour deviations, and utility installation drift early, avoiding expensive rework.
+              Slide the comparison bar to reveal what the defect detection agent found in the same frame — cracks, corrosion, and structural anomalies annotated directly on the drone image, each backed by a confidence score.
             </p>
 
             <div className="bg-brand-navy/60 border border-white/10 rounded-xl p-4 space-y-3">
               <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Model Format Supported</span>
-                <span className="text-white font-semibold">IFC, RVT, DXF, LandXML</span>
+                <span className="text-gray-400">Detection Pipeline</span>
+                <span className="text-white font-semibold">Image Analysis → Defect Detection</span>
               </div>
               <div className="flex justify-between text-xs">
-                <span className="text-gray-400">Positioning Accuracy</span>
-                <span className="text-white font-semibold">Coordinate reference grid alignment</span>
+                <span className="text-gray-400">Output Format</span>
+                <span className="text-white font-semibold">Bounding markers + Markdown report</span>
               </div>
             </div>
           </div>
@@ -71,15 +71,15 @@ export default function BimSlider() {
                 }}
               />
               <div className="absolute top-4 left-4 bg-brand-dark/80 px-3 py-1 rounded text-xs font-bold text-white border border-white/10 z-20">
-                Drone Capture (As-Built)
+                Raw Drone Frame
               </div>
 
-              {/* Overlapping Slide-out CAD/BIM Mockup */}
+              {/* Overlapping Slide-out AI Annotation Mockup */}
               <div
                 className="absolute inset-y-0 left-0 right-0 overflow-hidden transition-all duration-75"
                 style={{ clipPath: `polygon(0 0, ${sliderPosition}% 0, ${sliderPosition}% 100%, 0 100%)` }}
               >
-                {/* Visual rendering of CAD drawing */}
+                {/* Visual rendering of AI defect overlay */}
                 <div
                   className="absolute inset-0 bg-cover bg-center brightness-110 contrast-125 grayscale"
                   style={{
@@ -87,12 +87,12 @@ export default function BimSlider() {
                     filter: "grayscale(100%) invert(0.85) brightness(1.2)",
                   }}
                 />
-                
-                {/* Blueprint grid layout lines overlay */}
+
+                {/* Defect detection grid overlay */}
                 <div className="absolute inset-0 bg-white/5 pointer-events-none border border-white/10 grid grid-cols-8 grid-rows-8 opacity-40" />
-                
+
                 <div className="absolute top-4 right-4 bg-white text-black px-3 py-1 rounded text-xs font-bold z-20">
-                  CAD Design Overlay
+                  AI Defect Overlay
                 </div>
               </div>
 

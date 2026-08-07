@@ -1,32 +1,32 @@
 import { useState } from "react";
 import { Calculator, ArrowRight, Clock, ShieldCheck } from "lucide-react";
 
-type IndustryType = "construction" | "energy" | "agriculture";
+type IndustryType = "bridges" | "energy" | "roads";
 
 export default function RoiCalculator() {
-  const [industry, setIndustry] = useState<IndustryType>("construction");
+  const [industry, setIndustry] = useState<IndustryType>("bridges");
   const [projectCount, setProjectCount] = useState<number>(3);
-  const [siteSize, setSiteSize] = useState<number>(50); // acres or sites
+  const [siteSize, setSiteSize] = useState<number>(50); // assets or segments
 
   // Calculations config
   const industryStats = {
-    construction: {
-      label: "Construction Projects",
-      sizeLabel: "Average Project Area (Acres)",
+    bridges: {
+      label: "Bridge Structures",
+      sizeLabel: "Number of Spans per Bridge",
       hoursMultiplier: 12,
       costMultiplier: 850,
       accuracyImprovement: "98.5%",
     },
     energy: {
       label: "Solar / Turbine Sites",
-      sizeLabel: "Number of MW Capacities",
+      sizeLabel: "Panels / Blades per Site",
       hoursMultiplier: 24,
       costMultiplier: 1200,
       accuracyImprovement: "99.2%",
     },
-    agriculture: {
-      label: "Farming Fields",
-      sizeLabel: "Cultivated Land Size (Acres)",
+    roads: {
+      label: "Road Segments",
+      sizeLabel: "Segment Length (Miles)",
       hoursMultiplier: 4,
       costMultiplier: 320,
       accuracyImprovement: "96.8%",
@@ -57,7 +57,7 @@ export default function RoiCalculator() {
             </h2>
 
             <p className="text-gray-300 text-base leading-relaxed">
-              Drones and reality capture do not just collect nice images — they generate direct bottom-line benefits. Use our calculator to approximate the hours and operational overhead you can eliminate.
+              A five-agent AI pipeline does not just flag defects — it replaces days of manual inspection paperwork. Use our calculator to approximate the hours and overhead you can eliminate.
             </p>
 
             {/* Feature lists */}
@@ -68,17 +68,17 @@ export default function RoiCalculator() {
                 </div>
                 <div>
                   <h4 className="text-white font-semibold text-sm">Reduce Inspection Overhead</h4>
-                  <p className="text-xs text-gray-400">Scan 100+ acres in under 20 minutes instead of days on foot.</p>
+                  <p className="text-xs text-gray-400">Get a defect report in minutes instead of days of manual review.</p>
                 </div>
               </div>
-              
+
               <div className="flex items-start space-x-3">
                 <div className="p-1 bg-white/10 rounded-lg text-white mt-1">
                   <ShieldCheck className="w-4 h-4" />
                 </div>
                 <div>
-                  <h4 className="text-white font-semibold text-sm">Minimize Insurance Risks</h4>
-                  <p className="text-xs text-gray-400">Map hazardous rooftops and steep cliff faces autonomously.</p>
+                  <h4 className="text-white font-semibold text-sm">Catch Defects Earlier</h4>
+                  <p className="text-xs text-gray-400">Consistent, severity-ranked findings instead of ad hoc site notes.</p>
                 </div>
               </div>
             </div>
@@ -116,8 +116,8 @@ export default function RoiCalculator() {
               {/* Slider 1: Project count */}
               <div>
                 <div className="flex justify-between text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">
-                  <span>Active Project Sites</span>
-                  <span className="text-white font-mono">{projectCount} sites</span>
+                  <span>Active Assets</span>
+                  <span className="text-white font-mono">{projectCount} assets</span>
                 </div>
                 <input
                   type="range"
@@ -176,7 +176,7 @@ export default function RoiCalculator() {
                   href="#"
                   className="w-full py-4 bg-white hover:bg-gray-200 text-black font-extrabold rounded-xl flex items-center justify-center space-x-2 transition-all shadow-lg hover:shadow-white/5 text-sm"
                 >
-                  <span>Request Full Enterprise Assessment Report</span>
+                  <span>Request a Full Inspection Assessment</span>
                   <ArrowRight className="w-4 h-4" />
                 </a>
               </div>

@@ -1,34 +1,34 @@
-import { HardHat, Sun, Tractor, Factory, ArrowRight } from "lucide-react";
+import { Landmark, Zap, Sun, Route, ArrowRight } from "lucide-react";
 
 export default function Solutions() {
   const industries = [
     {
-      name: "Construction",
-      icon: HardHat,
+      name: "Bridges",
+      icon: Landmark,
       color: "from-neutral-200 to-neutral-400",
-      desc: "Monitor earthworks progress, compare construction states to design plans, and document visual records for claims resolution.",
-      stats: "15% average schedule reduction",
+      desc: "Detect concrete cracks, spalling, delamination, and corrosion on piers, girders, and decks before they require closures.",
+      stats: "Severity-ranked defects per span",
     },
     {
-      name: "Solar & Renewables",
-      icon: Sun,
+      name: "Wind Turbines",
+      icon: Zap,
       color: "from-neutral-300 to-neutral-500",
-      desc: "Perform automated thermal scans of solar arrays to detect cells failure. Run inspection passes on wind turbine blades.",
-      stats: "99% automated issue detection rate",
+      desc: "Flag blade erosion, lightning strike damage, and coating failures from routine drone passes without grounding the turbine.",
+      stats: "Confidence-scored blade reports",
     },
     {
-      name: "Agriculture",
-      icon: Tractor,
+      name: "Solar Farms",
+      icon: Sun,
       color: "from-neutral-400 to-neutral-600",
-      desc: "Calculate vegetation index metrics (NDVI) to inspect nitrogen status, find irrigation leaks, and count plant stand yields.",
-      stats: "5% yield boost from early threat detection",
+      desc: "Surface hot spots, cracked cells, and wiring faults across large panel arrays in minutes instead of manual walkdowns.",
+      stats: "Panel-level severity triage",
     },
     {
-      name: "Mining & Quarries",
-      icon: Factory,
+      name: "Roads",
+      icon: Route,
       color: "from-neutral-500 to-neutral-700",
-      desc: "Reconstruct pit topography. Track volumetric changes in massive raw material stockpiles automatically in minutes.",
-      stats: "95% faster stockpile inventory reporting",
+      desc: "Identify potholes, surface cracking, and shoulder erosion across road segments to prioritize maintenance spend.",
+      stats: "Network-scale defect tracking",
     },
   ];
 
@@ -39,10 +39,10 @@ export default function Solutions() {
         <div className="max-w-3xl text-left space-y-4 mb-16">
           <span className="text-xs font-bold text-brand-cyan uppercase tracking-widest">Tailored Solutions</span>
           <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
-            Built for the Industries that Shape the World
+            Built for the Infrastructure You Inspect
           </h2>
           <p className="text-gray-300 text-lg leading-relaxed">
-            Every industry has specific data requirements. DroneDeploy adapts to your team's workflow, delivering domain-specific analytical engines.
+            Every asset type has different failure modes. Our AI pipeline adapts its detection logic to bridges, wind turbines, solar farms, and roads.
           </p>
         </div>
 
