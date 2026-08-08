@@ -51,7 +51,8 @@ Powered by a **LangGraph multi-agent pipeline** and a **React + Node.js frontend
 │   Image Analysis → Defect Detection → Severity          │
 │       → Recommendation → Report                         │
 │                                                          │
-│   Model: Google Gemini (with heuristic fallback)        │
+│   Model: Groq (llama-3.3-70b-versatile), heuristic       │
+│   fallback if the API call fails                        │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -61,9 +62,9 @@ Powered by a **LangGraph multi-agent pipeline** and a **React + Node.js frontend
 
 | Layer | Tech |
 |---|---|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS |
-| Backend | Node.js, Express, lowdb |
-| AI Service | Python, FastAPI, LangGraph, LangChain, Gemini |
+| Frontend | React 19, TypeScript, Vite, Tailwind CSS |
+| Backend | Node.js, Express 5, lowdb-style flat JSON (`db.json`) |
+| AI Service | Python, FastAPI, LangGraph, LangChain, Groq |
 | Streaming | Server-Sent Events (SSE) |
 | Auth | JWT |
 
@@ -74,21 +75,22 @@ Powered by a **LangGraph multi-agent pipeline** and a **React + Node.js frontend
 ### Prerequisites
 - Node.js 18+
 - Python 3.11+
-- A [Google AI Studio](https://aistudio.google.com/) API key
+- A [Groq](https://console.groq.com/) API key (used by the LangGraph AI service)
 
 ### 1. Clone the repo
 
 ```bash
-git clone https://github.com/yashasp322-ship-it/Drone-Inspection-.git
-cd Drone-Inspection-
+git clone https://github.com/yashasp322-ship-it/Drone-Inspection-Platform.git
+cd Drone-Inspection-Platform
 ```
 
 ### 2. Set up environment
 
-Create a `.env` file in the root:
+Create a `.env` file in the root (also copy/create `langgraph_service/.env`, which is loaded in addition to the root one):
 
 ```env
-GEMINI_API_KEY=your_gemini_api_key_here
+GROQ_API_KEY=your_groq_api_key_here
+GEMINI_API_KEY=your_gemini_api_key_here   # optional, used only by the legacy orchestrator in server.js
 ```
 
 ### 3. Install frontend + backend
@@ -111,7 +113,7 @@ pip install -r requirements.txt
 **Terminal 1 — Frontend + Node backend:**
 ```bash
 npm run dev          # Vite frontend on :5173
-node server.js       # Node backend on :3001
+node server.js       # Node backend on :5001
 ```
 
 **Terminal 2 — AI service:**
@@ -150,8 +152,8 @@ Drone Infrastructure Inspector/
 ## 🤖 AI Pipeline Details
 
 The LangGraph pipeline uses a **StateGraph** with a deterministic supervisor that routes between 5 specialized agent nodes. Each node:
-- Attempts a live Gemini API call
-- Falls back to **heuristic/template-based results** if the API is unavailable (rate limits, quota, etc.)
+- Attempts a live Groq API call (`llama-3.3-70b-versatile`)
+- Falls back to **heuristic/template-based results** on any failure (missing key, timeout, rate limits, bad JSON, etc.)
 - Returns structured JSON that is passed to the next agent
 
 This ensures the inspection always completes and returns a full report, even without a live AI response.
