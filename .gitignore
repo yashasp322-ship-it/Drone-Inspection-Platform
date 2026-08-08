@@ -41,3 +41,5 @@ curl_out.json
 test_out.log
 db.json
 CLAUDE.md
+langgraph_service/training/
+*.pt

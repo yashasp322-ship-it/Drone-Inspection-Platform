@@ -1,96 +1,131 @@
-import { useState, useEffect } from "react";
-import { Star, ChevronLeft, ChevronRight, Quote } from "lucide-react";
+import { Check } from "lucide-react";
+import { motion } from "framer-motion";
+
+const plans = [
+  {
+    name: "Starter",
+    price: "$20",
+    period: "/mo",
+    description: "For small teams running occasional inspections.",
+    features: [
+      "Up to 10 inspections / month",
+      "Single-agent defect detection",
+      "Markdown report exports",
+      "Email support",
+    ],
+    highlighted: false,
+  },
+  {
+    name: "Professional",
+    price: "$50",
+    period: "/mo",
+    description: "For infrastructure teams running the full pipeline at scale.",
+    features: [
+      "Unlimited inspections",
+      "Full 5-agent LangGraph pipeline",
+      "Live agent status streaming",
+      "Google Calendar integration",
+      "Priority support",
+    ],
+    highlighted: true,
+  },
+  {
+    name: "Enterprise",
+    price: "$100",
+    period: "",
+    description: "For organizations with multi-site fleets and compliance needs.",
+    features: [
+      "Everything in Professional",
+      "Dedicated onboarding",
+      "Custom severity thresholds",
+      "SSO & team management",
+      "SLA-backed support",
+    ],
+    highlighted: false,
+  },
+];
 
 export default function Testimonials() {
-  const [activeIndex, setActiveIndex] = useState(0);
-
-  const testimonials = [
-    {
-      quote: "This platform has completely transformed how we handle solar site inspections. We ran a 400-panel array through the pipeline in an afternoon and caught three critical hot spots before they became failures.",
-      author: "Sarah Jenkins",
-      role: "VP of Quality, Renewables Corp",
-      logo: "SolarGrid",
-      metric: "99.8% Detection Confidence",
-    },
-    {
-      quote: "Before this, our bridge inspection reports took weeks of manual review and write-ups. Now the pipeline flags every crack and generates the Markdown report before the drone even lands.",
-      author: "Marcus Vance",
-      role: "Senior Project Manager, BuildCore Infrastructure",
-      logo: "BuildCore",
-      metric: "14x Faster Report Turnaround",
-    },
-    {
-      quote: "The severity assessment agent caught a hairline crack on a turbine blade root that our field team had missed on two prior walkdowns. That one catch avoided a full blade replacement.",
-      author: "Elena Rostova",
-      role: "Reliability Director, MetroBuild Energy",
-      logo: "MetroBuild",
-      metric: "$120k+ Cost Avoided",
-    },
-  ];
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % testimonials.length);
-    }, 6000);
-    return () => clearInterval(interval);
-  }, []);
-
   return (
-    <section className="py-24 bg-brand-navy/10 border-t border-white/5 relative overflow-hidden">
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-white/5 rounded-full blur-[100px] pointer-events-none" />
+    <section id="pricing" className="py-24 bg-gradient-to-b from-[#120D20] via-[#1A132E] to-[#140F23] text-[#E2DEFA] border-t border-[#8B5CF6]/15 relative overflow-hidden">
+      {/* Background Soft Periwinkle Ambient Glow */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-[#C4BDF3]/20 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-5xl mx-auto px-6 relative z-10">
-        
-        {/* Top Trust Icons */}
-        <div className="text-center space-y-4 mb-16">
-          <span className="text-[10px] uppercase font-bold tracking-widest text-gray-500">
-            Trusted by Industry Leaders
+        {/* Title Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.6 }}
+          className="text-center space-y-4 mb-16"
+        >
+          <span className="text-xs font-bold text-[#C4BDF3] uppercase tracking-widest px-3 py-1 rounded-full bg-[#C4BDF3]/10 border border-[#C4BDF3]/20">
+            Transparent Pricing
           </span>
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 opacity-50 grayscale transition-all duration-300">
-            <span className="text-lg font-black text-white">BUILDCORE</span>
-            <span className="text-lg font-black text-white">SOLAR_GRID</span>
-            <span className="text-lg font-black text-white">METRO_BUILD</span>
-            <span className="text-lg font-black text-white">APEX_MINING</span>
-          </div>
-        </div>
+          <h2 className="text-3xl md:text-4xl font-bold text-white leading-tight">
+            Simple, Transparent <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C4BDF3] via-[#E2DEFA] to-[#9A8DE6]">Pricing</span>
+          </h2>
+          <p className="text-[#D4CEF6] max-w-xl mx-auto text-sm sm:text-base">
+            Choose the plan that fits your inspection workload. Cancel anytime.
+          </p>
+        </motion.div>
 
-        {/* Carousel Slider */}
-        <div className="bg-brand-dark/80 border border-white/10 rounded-3xl p-8 md:p-12 shadow-2xl relative">
-          <Quote className="absolute top-8 left-8 w-12 h-12 text-white/10 pointer-events-none" />
-          
-          <div className="min-h-[220px] flex flex-col justify-between space-y-8">
-            <p className="text-xl md:text-2xl text-gray-100 font-medium leading-relaxed italic text-left">
-              "{testimonials[activeIndex].quote}"
-            </p>
+        {/* Crisp White/Light Periwinkle Gradient Pricing Cards */}
+        <div className="grid md:grid-cols-3 gap-6">
+          {plans.map((plan, index) => (
+            <motion.div
+              key={plan.name}
+              initial={{ opacity: 0, y: 40 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.6, delay: index * 0.15 }}
+              className={`group rounded-3xl p-8 flex flex-col relative cursor-pointer backdrop-blur-xl ${
+                plan.highlighted
+                  ? "pricing-card-highlighted shadow-2xl md:scale-105"
+                  : "pricing-card shadow-lg"
+              }`}
+            >
+              {plan.highlighted && (
+                <span className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#6D28D9] via-[#7C3AED] to-[#8B5CF6] text-white text-[10px] uppercase font-bold tracking-widest px-4 py-1 rounded-full shadow-lg transition-transform duration-300 group-hover:-translate-y-1">
+                  Most Popular
+                </span>
+              )}
 
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pt-6 border-t border-white/15">
-              <div className="text-left">
-                <div className="text-white font-bold text-base">{testimonials[activeIndex].author}</div>
-                <div className="text-xs text-gray-400 mt-0.5">{testimonials[activeIndex].role}</div>
+              <h3 className="text-xl font-extrabold text-[#1E1235] transition-colors duration-300 group-hover:text-[#6D28D9]">
+                {plan.name}
+              </h3>
+              <p className="text-xs mt-1 text-[#4A3B69] font-medium">
+                {plan.description}
+              </p>
+
+              <div className="flex items-end mt-6 mb-6">
+                <span className="text-4xl font-extrabold text-[#1E1235]">
+                  {plan.price}
+                </span>
+                {plan.period && (
+                  <span className="text-sm ml-1 mb-1 text-[#6D28D9] font-bold">
+                    {plan.period}
+                  </span>
+                )}
               </div>
 
-              <div className="bg-white/10 border border-white/20 px-4 py-2 rounded-xl text-white text-sm font-extrabold flex items-center space-x-2">
-                <Star className="w-4 h-4 fill-white" />
-                <span>{testimonials[activeIndex].metric}</span>
-              </div>
-            </div>
-          </div>
+              <ul className="space-y-3 flex-grow">
+                {plan.features.map((feature) => (
+                  <li key={feature} className="flex items-start space-x-2">
+                    <Check className="w-4 h-4 mt-0.5 flex-shrink-0 text-[#6D28D9]" />
+                    <span className="text-sm text-[#362758] font-medium transition-colors">
+                      {feature}
+                    </span>
+                  </li>
+                ))}
+              </ul>
 
-          {/* Controls */}
-          <div className="absolute right-8 bottom-12 flex space-x-2">
-            <button
-              onClick={() => setActiveIndex((prev) => (prev - 1 + testimonials.length) % testimonials.length)}
-              className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => setActiveIndex((prev) => (prev + 1) % testimonials.length)}
-              className="p-2 rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors"
-            >
-              <ChevronRight className="w-5 h-5" />
-            </button>
-          </div>
+              <button className="mt-8 w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-[#6D28D9] via-[#7C3AED] to-[#8B5CF6] text-white shadow-md transition-all duration-300 group-hover:scale-105 group-hover:shadow-[0_4px_25px_rgba(109,40,217,0.4)]">
+                Get Started
+              </button>
+            </motion.div>
+          ))}
         </div>
       </div>
     </section>

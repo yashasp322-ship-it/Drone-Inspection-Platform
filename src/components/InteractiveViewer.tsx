@@ -33,43 +33,43 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
     defects: {
       title: "Defect Detection Overlay",
       desc: "Output of the Defect Detection Agent — cracks, corrosion, and structural anomalies flagged with bounding markers.",
-      overlayStyle: "opacity-90 bg-gradient-to-tr from-black via-neutral-500 to-white mix-blend-overlay",
+      overlayStyle: "opacity-90 bg-gradient-to-tr from-brand-cyan via-[#8B5CF6] to-white mix-blend-overlay",
       blendMode: "mix-blend-overlay",
     },
     thermal: {
       title: "Thermal Mapping",
       desc: "Infrared heat signature mapping. Useful for spotting hot spots on solar panels or turbine gearboxes.",
-      overlayStyle: "opacity-80 bg-gradient-to-r from-black via-neutral-600 to-white mix-blend-luminosity",
+      overlayStyle: "opacity-80 bg-gradient-to-r from-brand-cyan via-[#6D28D9] to-white mix-blend-luminosity",
       blendMode: "mix-blend-luminosity",
     },
     severity: {
       title: "Severity Assessment",
       desc: "Output of the Severity Assessment Agent — each detected defect scored and ranked by risk before recommendations are generated.",
-      overlayStyle: "opacity-60 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] mix-blend-screen",
+      overlayStyle: "opacity-60 bg-[radial-gradient(#4C1D95_1px,transparent_1px)] [background-size:16px_16px] mix-blend-screen",
       blendMode: "mix-blend-screen",
     },
   };
 
   return (
-    <section id="demo-viewer" className="py-20 bg-brand-navy/30 border-y border-white/5 relative">
+    <section id="demo-viewer" className="py-20 bg-brand-navy/30 border-y border-[#8B5CF6]/10 relative">
       <div className="max-w-7xl mx-auto px-6">
         {/* Header Content */}
         <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
-          <h2 className="text-3xl sm:text-4xl font-extrabold text-white">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-brand-slate">
             Watch the AI Pipeline Work
           </h2>
-          <p className="text-gray-300 text-lg">
+          <p className="text-[#5B4E77] text-lg">
             Step through what each agent sees — raw imagery, detected defects, thermal signatures, and the severity scores behind every recommendation.
           </p>
         </div>
 
         {/* Outer Dashboard Window Container */}
-        <div className="grid lg:grid-cols-12 gap-8 bg-brand-dark/80 border border-white/10 rounded-2xl overflow-hidden shadow-2xl">
-          
+        <div className="grid lg:grid-cols-12 gap-8 bg-brand-sky/80 border border-[#8B5CF6]/15 rounded-2xl overflow-hidden shadow-2xl">
+
           {/* Left Controls / Sidebar (Col span 3) */}
-          <div className="lg:col-span-3 border-r border-white/10 p-6 flex flex-col justify-between space-y-6">
+          <div className="lg:col-span-3 border-r border-[#8B5CF6]/15 p-6 flex flex-col justify-between space-y-6">
             <div>
-              <div className="flex items-center space-x-2 text-white font-bold text-lg mb-6 pb-4 border-b border-white/10">
+              <div className="flex items-center space-x-2 text-brand-slate font-bold text-lg mb-6 pb-4 border-b border-[#8B5CF6]/15">
                 <Layers className="w-5 h-5 text-brand-cyan" />
                 <span>Layers & Map Modes</span>
               </div>
@@ -82,14 +82,14 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
                     onClick={() => setActiveLayer(layer)}
                     className={`w-full text-left px-4 py-3 rounded-lg border transition-all duration-200 flex items-center justify-between ${
                       activeLayer === layer
-                        ? "bg-brand-cyan/20 border-brand-cyan text-white font-semibold"
-                        : "bg-white/5 border-white/5 text-gray-400 hover:bg-white/10 hover:text-white"
+                        ? "bg-brand-cyan/20 border-brand-cyan text-brand-slate font-semibold"
+                        : "bg-white/40 border-[#8B5CF6]/10 text-[#6B5D89] hover:bg-white/70 hover:text-brand-slate"
                     }`}
                   >
                     <span className="capitalize">{layer === "defects" ? "Defect Detection" : layer === "severity" ? "Severity Assessment" : layer}</span>
                     <span
                       className={`w-2.5 h-2.5 rounded-full ${
-                        activeLayer === layer ? "bg-brand-cyan animate-pulse" : "bg-gray-600"
+                        activeLayer === layer ? "bg-brand-cyan animate-pulse" : "bg-[#C4B5FD]"
                       }`}
                     />
                   </button>
@@ -98,14 +98,14 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
             </div>
 
             {/* Explainer Box */}
-            <div className="bg-brand-blue/20 border border-white/5 rounded-lg p-4">
+            <div className="bg-brand-blue/40 border border-[#8B5CF6]/10 rounded-lg p-4">
               <div className="flex items-start space-x-2">
                 <Info className="w-4 h-4 text-brand-cyan mt-0.5 flex-shrink-0" />
                 <div className="space-y-1">
-                  <div className="text-xs font-bold text-white uppercase tracking-wider">
+                  <div className="text-xs font-bold text-brand-slate uppercase tracking-wider">
                     {layerConfigs[activeLayer].title}
                   </div>
-                  <p className="text-xs text-gray-400 leading-relaxed">
+                  <p className="text-xs text-[#6B5D89] leading-relaxed">
                     {layerConfigs[activeLayer].desc}
                   </p>
                 </div>
@@ -114,16 +114,16 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
           </div>
 
           {/* Interactive Screen Display (Col span 9) */}
-          <div className="lg:col-span-9 relative bg-brand-dark min-h-[500px] flex flex-col justify-between">
+          <div className="lg:col-span-9 relative bg-brand-sky min-h-[500px] flex flex-col justify-between">
             {/* Top Workspace Header */}
-            <div className="bg-brand-dark/95 border-b border-white/10 px-6 py-4 flex items-center justify-between z-10">
+            <div className="bg-brand-sky/95 border-b border-[#8B5CF6]/15 px-6 py-4 flex items-center justify-between z-10">
               <div className="flex items-center space-x-3">
                 <MapPin className="w-5 h-5 text-brand-cyan" />
                 <div>
-                  <h4 className="text-sm font-bold text-white">
+                  <h4 className="text-sm font-bold text-brand-slate">
                     {inspectedAsset ? inspectedAsset.name : "Cedar Creek Bridge — Span 4"}
                   </h4>
-                  <p className="text-[10px] text-gray-500">
+                  <p className="text-[10px] text-[#7A6D97]">
                     {inspectedAsset
                       ? `Location: ${inspectedAsset.location} ${
                           inspectedAsset.gDriveLink ? `• Drive: ${inspectedAsset.gDriveLink}` : ""
@@ -132,14 +132,14 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-center space-x-4">
                 <button
                   onClick={() => setShowAnnotations(!showAnnotations)}
                   className={`flex items-center space-x-2 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all ${
                     showAnnotations
-                      ? "bg-brand-cyan text-brand-dark"
-                      : "bg-white/5 border border-white/10 text-gray-400 hover:text-white"
+                      ? "bg-brand-cyan text-white"
+                      : "bg-white/40 border border-[#8B5CF6]/15 text-[#6B5D89] hover:text-brand-slate"
                   }`}
                 >
                   <Eye className="w-4 h-4" />
@@ -186,11 +186,11 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
                     
                     {/* Point Pin */}
                     <div className="relative w-4 h-4 bg-brand-cyan border border-white rounded-full shadow-lg group-hover:scale-125 transition-transform flex items-center justify-center">
-                      <div className="w-1.5 h-1.5 bg-brand-dark rounded-full" />
+                      <div className="w-1.5 h-1.5 bg-white rounded-full" />
                     </div>
 
                     {/* Quick hover indicator label */}
-                    <div className="absolute left-6 top-1/2 -translate-y-1/2 bg-brand-dark/95 border border-white/20 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                    <div className="absolute left-6 top-1/2 -translate-y-1/2 bg-brand-cyan/95 border border-[#8B5CF6]/30 text-white text-[10px] font-bold px-2 py-1 rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
                       {pin.label}
                     </div>
                   </div>
@@ -199,38 +199,38 @@ export default function InteractiveViewer({ inspectedAsset }: InteractiveViewerP
 
             {/* Floating Stats / Measurement Details overlay */}
             {activeAnnotation && showAnnotations && (
-              <div className="absolute bottom-6 left-6 right-6 bg-brand-dark/95 border border-white/15 rounded-xl p-5 shadow-2xl backdrop-blur-md z-30 animate-in slide-in-from-bottom-4 duration-300">
+              <div className="absolute bottom-6 left-6 right-6 glass-light rounded-xl p-5 shadow-2xl z-30 animate-in slide-in-from-bottom-4 duration-300">
                 {annotations.filter((a) => a.id === activeAnnotation).map((ann) => (
                   <div key={ann.id} className="flex justify-between items-center">
                     <div>
                       <span className="text-[10px] uppercase font-bold tracking-widest text-brand-cyan">
                         Detected Defect
                       </span>
-                      <h5 className="text-white text-base font-extrabold mt-1">{ann.label}</h5>
+                      <h5 className="text-brand-slate text-base font-extrabold mt-1">{ann.label}</h5>
                     </div>
 
                     <div className="flex items-center space-x-6">
                       {ann.size && (
                         <div>
-                          <div className="text-[10px] text-gray-400">ESTIMATED SIZE</div>
-                          <div className="text-white font-mono font-bold text-lg">{ann.size}</div>
+                          <div className="text-[10px] text-[#6B5D89]">ESTIMATED SIZE</div>
+                          <div className="text-brand-slate font-mono font-bold text-lg">{ann.size}</div>
                         </div>
                       )}
                       {ann.severity && (
                         <div>
-                          <div className="text-[10px] text-gray-400">SEVERITY</div>
-                          <div className="text-white font-mono font-bold text-lg">{ann.severity}</div>
+                          <div className="text-[10px] text-[#6B5D89]">SEVERITY</div>
+                          <div className="text-brand-slate font-mono font-bold text-lg">{ann.severity}</div>
                         </div>
                       )}
                       {ann.status && (
                         <div>
-                          <div className="text-[10px] text-gray-400">STATUS</div>
+                          <div className="text-[10px] text-[#6B5D89]">STATUS</div>
                           <div className="text-emerald-400 font-bold text-lg">{ann.status}</div>
                         </div>
                       )}
                       <button
                         onClick={() => setActiveAnnotation(null)}
-                        className="text-gray-400 hover:text-white text-xs font-semibold px-3 py-1 bg-white/5 border border-white/10 rounded-lg"
+                        className="text-[#6B5D89] hover:text-brand-slate text-xs font-semibold px-3 py-1 bg-white/50 border border-[#8B5CF6]/15 rounded-lg"
                       >
                         Close
                       </button>

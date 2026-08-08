@@ -1,10 +1,8 @@
 import { useState } from "react";
 import Header from "./components/Header";
 import Hero from "./components/Hero";
-import InteractiveViewer from "./components/InteractiveViewer";
 import CaptureMethods from "./components/CaptureMethods";
 import BimSlider from "./components/BimSlider";
-import RoiCalculator from "./components/RoiCalculator";
 import Solutions from "./components/Solutions";
 import Testimonials from "./components/Testimonials";
 import Footer from "./components/Footer";
@@ -39,7 +37,7 @@ export default function App() {
   }
 
   return (
-    <div className="bg-brand-dark min-h-screen flex flex-col">
+    <div className="bg-[#140F23] text-[#E2DEFA] min-h-screen flex flex-col">
       {/* Sticky Header */}
       <Header
         isLoggedIn={isLoggedIn}
@@ -52,22 +50,16 @@ export default function App() {
         {/* Hero Section */}
         <Hero />
 
-        {/* Interactive Viewer Mockup */}
-        <InteractiveViewer />
-
         {/* Tabbed Capture Workflows */}
         <CaptureMethods />
 
         {/* Side-by-side CAD Slider */}
         <BimSlider />
 
-        {/* Financial ROI Calculator */}
-        <RoiCalculator />
-
         {/* Sector Solutions */}
         <Solutions />
 
-        {/* Quote Testimonials */}
+        {/* Pricing */}
         <Testimonials />
       </main>
 

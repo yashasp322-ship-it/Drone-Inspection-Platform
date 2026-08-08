@@ -5,58 +5,113 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: 'Inter', sans-serif;
   overflow-x: hidden;
-  background-color: #000000; /* pure black background default */
-  color: #ffffff;
+  background-color: #140F23;
+  color: #E2DEFA;
 }
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
+
 ::-webkit-scrollbar-track {
-  background: #000000;
+  background: #140F23;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: #171717;
+  background: #4C3B78;
   border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: #262626;
+  background: #8B5CF6;
 }
 
 /* Glassmorphism utility */
 .glass {
-  background: rgba(0, 0, 0, 0.8);
+  background: rgba(196, 189, 243, 0.15);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(196, 189, 243, 0.25);
 }
 
 .glass-light {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(0, 0, 0, 0.08);
-}
-@keyframes gradientMove{
-0%{
-background-position:0% 50%;
+  border: 1px solid rgba(196, 189, 243, 0.2);
 }
 
-50%{
-background-position:100% 50%;
+@keyframes gradientMove {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
 }
 
-100%{
-background-position:0% 50%;
+.animate-gradient {
+
+  animation: gradientMove 6s ease infinite;
+
 }
+
+@keyframes fadeUpIn {
+  0% {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.animate-gradient{
+.animate-fade-up {
+  animation: fadeUpIn 0.7s ease-out both;
+}
 
-animation:gradientMove 6s ease infinite;
+/* Pricing card: reversed periwinkle lavender wave gradient (bottom-right purple, top-left white) */
+.pricing-card {
+  background: radial-gradient(circle at 100% 100%, #B8AFEE 0%, #C5BEF0 45%, #FAF8FF 95%);
+  border: 1px solid rgba(139, 92, 246, 0.35);
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.45s ease;
+  will-change: transform;
+}
 
+.pricing-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: rgba(109, 40, 217, 0.6);
+  box-shadow: 0 22px 50px -10px rgba(109, 40, 217, 0.3);
+}
+
+.pricing-card-highlighted {
+  background: radial-gradient(circle at 100% 100%, #A79CEB 0%, #C4BDF3 50%, #FFFFFF 100%);
+  border: 2px solid rgba(109, 40, 217, 0.6);
+  box-shadow: 0 15px 45px rgba(109, 40, 217, 0.3);
+  transition: transform 0.35s ease, box-shadow 0.35s ease, border-color 0.35s ease;
+}
+
+.pricing-card-highlighted:hover {
+  transform: translateY(-12px) scale(1.04);
+  border-color: rgba(109, 40, 217, 0.85);
+  box-shadow: 0 28px 60px -10px rgba(109, 40, 217, 0.45);
 }
